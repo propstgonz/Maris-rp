@@ -113,3 +113,19 @@ test('morir mientras se acepta un traspaso no deja bienes huérfanos ni duplicad
     assert.ok(received === 0 || received === 6, `recibido ${received}`);
   }
 });
+
+test('listPendingForPlayer separa recibidas y enviadas y oculta las caducadas', async () => {
+  const a = await createCharacter(db, T);
+  const b = await createCharacter(db, T);
+  await goods.addGoods(a.id, madera.id, 3, ACTOR);
+  const sent = await consent.createRequest({ kind: 'item', fromPlayerId: a.id, toPlayerId: b.id, itemId: madera.id, quantity: 1.5 });
+  const stale = await consent.createRequest({ kind: 'item', fromPlayerId: a.id, toPlayerId: b.id, itemId: madera.id, quantity: 1 });
+  await db.execute(`UPDATE ${T.consent_requests} SET expires_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?`, [stale]);
+  const forA = await consent.listPendingForPlayer(a.id);
+  const forB = await consent.listPendingForPlayer(b.id);
+  assert.deepEqual(forA.outgoing.map(r => r.id), [sent]);
+  assert.deepEqual(forA.incoming, []);
+  assert.equal(forB.incoming[0].item_display_name, 'Madera Test');
+  assert.equal(forB.incoming[0].quantity, 1.5);
+  assert.equal(forB.incoming[0].from_discord_id, a.discord_id);
+});

@@ -47,6 +47,19 @@ const SQL = {
     SET status = 'cancelled', resolved_at = NOW()
     WHERE status = 'pending' AND (from_player_id = ? OR to_player_id = ?)
   `,
+  listPending: `
+    SELECT r.*, f.discord_id AS from_discord_id, f.character_name AS from_character_name,
+           t.discord_id AS to_discord_id, t.character_name AS to_character_name,
+           i.display_name AS item_display_name, pt.display_name AS property_type_display_name, pr.name AS property_name
+    FROM ${T.consent_requests} r
+    JOIN ${T.players} f ON f.id = r.from_player_id
+    JOIN ${T.players} t ON t.id = r.to_player_id
+    LEFT JOIN ${T.items} i ON i.id = r.item_id
+    LEFT JOIN ${T.properties} pr ON pr.id = r.property_id
+    LEFT JOIN ${T.property_types} pt ON pt.id = pr.property_type_id
+    WHERE r.status = 'pending' AND r.expires_at > NOW() AND (r.from_player_id = ? OR r.to_player_id = ?)
+    ORDER BY r.created_at DESC LIMIT 50
+  `,
   expire: `
     UPDATE ${T.consent_requests}
     SET status = 'expired', resolved_at = NOW()
@@ -184,6 +197,15 @@ export async function cancel(requestId, actorPlayerId, actor) {
 export async function cancelAllPendingForPlayerInTx(playerId) {
   const result = await execute(SQL.cancelAllForPlayer, [playerId, playerId]);
   return result.changes;
+}
+
+export async function listPendingForPlayer(playerId) {
+  const rows = await query(SQL.listPending, [playerId, playerId]);
+  const shaped = rows.map(row => ({ ...row, quantity: row.quantity === null ? null : Number(row.quantity) }));
+  return {
+    incoming: shaped.filter(row => row.to_player_id === playerId),
+    outgoing: shaped.filter(row => row.from_player_id === playerId),
+  };
 }
 
 export async function markExpired() {
