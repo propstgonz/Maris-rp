@@ -110,10 +110,107 @@ export interface PlayerRow {
   avatar_url: string | null;
 }
 
-export function fetchPlayer(Astro: AstroGlobal, discordId: string): Promise<PlayerRow> {
-  return getJson<PlayerRow>(Astro, `/api/players/${encodeURIComponent(discordId)}`);
-}
-
 export function fetchStaffDocs(Astro: AstroGlobal): Promise<{ content: string }> {
   return getJson<{ content: string }>(Astro, '/api/docs/staff');
+}
+
+export type StatMap = Record<'potencia' | 'intuicion' | 'chiripa' | 'autismo' | 'resistencia' | 'donjuanismo' | 'agilidad', number>;
+
+export interface FichaPlayer {
+  id: number;
+  discord_id: string;
+  character_name: string | null;
+  gender: 'hombre' | 'mujer' | null;
+  age: number | null;
+  character_created_at: string;
+  is_alive: boolean;
+  avatar_url: string | null;
+}
+
+export interface FichaRace {
+  slug: string;
+  name: string;
+  description: string;
+  traits: string | null;
+}
+
+export interface FichaMenhir {
+  slug: string;
+  name: string;
+  description: string;
+  magic_bonus: number;
+  magic_to_life: number;
+}
+
+export interface FichaProfile {
+  base: StatMap;
+  effective: StatMap;
+  freePoints: number;
+  race: FichaRace | null;
+  menhir: FichaMenhir | null;
+  magic: { magia: number; vidaExtra: number };
+  civil: { label: string; spouse: { id: number; discordId: string; characterName: string | null } | null };
+}
+
+export interface FichaNpc {
+  name: string;
+  count: number;
+}
+
+export interface FichaGood {
+  item_id: number;
+  display_name: string;
+  emoji: string | null;
+  category: string | null;
+  quantity: number;
+}
+
+export interface FichaProperty {
+  id: number;
+  type_display_name: string;
+  category: string;
+  name: string | null;
+  level: number;
+  location: string | null;
+  emoji: string | null;
+}
+
+export interface FichaSchool {
+  school: { slug: string; name: string; description: string; is_active: number };
+  rank: number;
+  levelName: string | null;
+  next: { rank: number; name: string; threshold: number } | null;
+  retryAfter: string | null;
+  active: boolean;
+}
+
+export interface FichaSchools {
+  schools: FichaSchool[];
+  magic: { magia: number; vidaExtra: number };
+  canClaimFreeSchool: boolean;
+}
+
+export interface FichaSpell {
+  school: string;
+  school_slug: string;
+  levelName: string;
+  min_rank: number;
+  name: string;
+  cost_amount: number;
+  cost_resource: string;
+  description: string;
+}
+
+export interface Ficha {
+  player: FichaPlayer;
+  profile: FichaProfile;
+  npcs: FichaNpc[];
+  goods: FichaGood[];
+  properties: FichaProperty[];
+  schools: FichaSchools;
+  spells: FichaSpell[];
+}
+
+export function fetchFicha(Astro: AstroGlobal, discordId: string): Promise<Ficha> {
+  return getJson<Ficha>(Astro, `/api/players/${encodeURIComponent(discordId)}/ficha`);
 }

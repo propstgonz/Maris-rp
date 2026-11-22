@@ -49,6 +49,9 @@ try {
   const me = await get('/api/me');
   check('GET /api/me sin sesión responde 401', me.statusCode === 401);
 
+  const ficha = await get('/api/players/123/ficha');
+  check('GET /api/players/123/ficha sin sesión responde 401', ficha.statusCode === 401);
+
   const tiles = await get('/api/tiles');
   check('GET /api/tiles responde 404 (el mapa ya no existe)', tiles.statusCode === 404);
 
