@@ -34,11 +34,13 @@ export default {
     const existing = await getPlayerByDiscordId(targetUser.id);
     const wasInGrace = Boolean(existing?.character_created_at && !existing.is_alive);
 
+    const actor = { discordId: interaction.user.id, username: interaction.user.tag, source: 'discord' };
+
     let player;
     try {
       player = wasInGrace
         ? await finalizeGraceDeath(targetUser.id, interaction.client)
-        : await markDeceased(interaction.client, targetUser.id, motivo, { permadeath: true });
+        : await markDeceased(interaction.client, targetUser.id, motivo, { permadeath: true, actor });
     } catch (err) {
       return interaction.reply({ content: `❌ ${err.message}`, flags: MessageFlags.Ephemeral });
     }
