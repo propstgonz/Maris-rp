@@ -160,7 +160,7 @@ export async function editType(id, fields, actor) {
   ]);
   const type = await queryOne(SQL.getType, [id]);
   await logAction({
-    ...actorFields(actor), action: 'propiedades.tipo_creado',
+    ...actorFields(actor), action: 'propiedades.tipo_editado',
     target: display, details: { typeId: id, edited: Object.keys(fields) },
   });
   return type;
@@ -171,7 +171,7 @@ export async function setTypeActive(id, isActive, actor) {
   if (changes !== 1) throw new UserFacingError('Ese tipo de propiedad no existe.');
   const type = await queryOne(SQL.getType, [id]);
   await logAction({
-    ...actorFields(actor), action: 'propiedades.tipo_creado',
+    ...actorFields(actor), action: isActive ? 'propiedades.tipo_activado' : 'propiedades.tipo_desactivado',
     target: type.display_name, details: { typeId: id, isActive: Boolean(isActive) },
   });
   return type;
