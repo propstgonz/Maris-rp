@@ -9,8 +9,8 @@ test('UserFacingError es una Error de verdad (instanceof Error también)', () =>
 });
 
 test('UserFacingError conserva el mensaje y el nombre', () => {
-  const err = new UserFacingError('no tienes suficiente Laburo');
-  assert.equal(err.message, 'no tienes suficiente Laburo');
+  const err = new UserFacingError('no tienes suficientes puntos libres');
+  assert.equal(err.message, 'no tienes suficientes puntos libres');
   assert.equal(err.name, 'UserFacingError');
 });
 

@@ -53,6 +53,7 @@ players(
   age SMALLINT NULL CHECK (age IS NULL OR age BETWEEN 1 AND 1000),
   race_id INT NULL  FK races(id),
   menhir_id INT NULL FK menhirs(id),
+  menhir_chosen_at DATETIME NULL,
   stat_potencia    TINYINT NOT NULL DEFAULT 0 CHECK (stat_potencia BETWEEN 0 AND 6),
   stat_intuicion   TINYINT NOT NULL DEFAULT 0 CHECK (stat_intuicion BETWEEN 0 AND 6),
   stat_chiripa     TINYINT NOT NULL DEFAULT 0 CHECK (stat_chiripa BETWEEN 0 AND 6),
@@ -83,9 +84,11 @@ races(
 
 menhirs(
   id INT PK AUTO_INCREMENT, slug VARCHAR(64) NOT NULL UNIQUE, name VARCHAR(100) NOT NULL,
-  description TEXT NULL, is_active TINYINT(1) NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-)                                                   -- vacía: los menhires llegarán más adelante
+  description TEXT NOT NULL,
+  mod_potencia … mod_agilidad TINYINT NOT NULL DEFAULT 0,
+  magic_bonus SMALLINT NOT NULL DEFAULT 0, magic_to_life TINYINT(1) NOT NULL DEFAULT 0, sort TINYINT NOT NULL
+)
+-- 11 menhires del Tomegrama págs. 56-57: guerrero ladron mago atronach amante torre dama ritual ofidio sombrio aprendiz
 
 marriages(
   id INT PK AUTO_INCREMENT,
@@ -221,9 +224,9 @@ Sin cambios de estructura: `audit_log`, `bot_jobs`, `terminal_jobs`, `system_sta
 
 | Dato | Regla | Dónde |
 |---|---|---|
-| Estadística efectiva | base + `races.mod_*` (puede pasar de 6 o ser negativa) | `domain/picarda.js` |
+| Estadística efectiva | base + `races.mod_*` + `menhirs.mod_*` (puede pasar de 6 o ser negativa) | `domain/picarda.js` |
 | Puntos libres | `8 + stat_bonus_points − Σ base` | `domain/picarda.js` |
-| Magia | `25 × max(0, Autismo efectivo)` | `domain/picarda.js` |
+| Magia | `25 × max(0, Autismo efectivo) + menhirs.magic_bonus`; con `magic_to_life` la Magia pasa a 0 y se muestra `+ Magia/100` de Vida | `domain/picarda.js` |
 | Estado civil | Casado/a si `open_slot = 1`; Viudo/a si el último matrimonio acabó en `viudedad`; Soltero/a si no | `domain/civilStatus.js` |
 | Modificador de tirada | `Autismo_ef + stat2_ef / divisor` (sin redondeo) | `domain/magic.js` |
 | Conjuros desbloqueados | `spells ⋈ schools(is_active=1) ⋈ school_progress` con `min_rank <= level_rank` | `magicService` |
@@ -238,10 +241,10 @@ export const STAT_LABELS = { potencia:'Potencia', intuicion:'Intuición', chirip
 export const BASE_POINTS = 8;
 export const MAX_BASE_PER_STAT = 6;
 export function baseStats(playerRow)              // -> { potencia: n, ... } desde stat_*
-export function raceModifiers(raceRow)            // -> { potencia: n, ... } desde mod_* (todo 0 si raceRow es null)
-export function effectiveStats(playerRow, raceRow)// -> base + raza
+export function modifiers(row)                   // -> { potencia: n, ... } desde mod_* de una raza o menhir (todo 0 si row es null)
+export function effectiveStats(playerRow, raceRow, menhirRow) // -> base + raza + menhir
 export function freePoints(playerRow)             // -> 8 + stat_bonus_points - Σ base
-export function magicPoints(effective)            // -> 25 * max(0, effective.autismo)
+export function magicPoints(effective, menhirRow) // -> { magia, vidaExtra }: magia = 25*max(0,autismo)+magic_bonus; si magic_to_life: { magia: 0, vidaExtra: magia/100 }
 export function validateAllocation(playerRow, stat, n) // -> null | mensaje de error (para explicar un changes===0)
 
 // src/domain/magic.js
@@ -250,6 +253,8 @@ export function attemptModifier(effective, school)  // school: { secondary_stat,
 export function isSuccess(total, threshold)         // total >= threshold
 export function mentorQualifies(mentorRank, targetRank) // mentorRank >= targetRank
 export function canClaimFreeSchool(effective, playerRow) // effective.autismo >= 6 && !free_school_claimed_at
+export const MENHIR_CHANGE_MONTHS = 6;
+export function canChangeMenhir(playerRow, now)  // sin menhir, o menhir_chosen_at + 6 meses <= now (vive en picarda.js)
 
 // src/domain/civilStatus.js
 export function civilStatusLabel({ active, lastEndReason, gender }) // 'Soltero/a' | 'Casado/a' | 'Viudo/a' (concuerda con gender si es hombre/mujer)
@@ -263,18 +268,16 @@ Todos los IDs de entrada son `players.id` salvo donde dice `discordId`. Todos la
 // profileService.js
 getPlayerByDiscordId(discordId)            // -> fila players | undefined
 requireLivingPlayer(discordId)             // -> fila players (UserFacingError si no hay personaje vivo)
-getProfile(playerId)                       // -> { player, race, menhir, base, effective, freePoints, magic, civil:{label, spouse:{id,discordId,characterName}|null} }
+getProfile(playerId)                       // -> { player, race, menhir, base, effective, freePoints, magic:{magia,vidaExtra}, menhirChangeAvailableAt, civil:{label, spouse:{id,discordId,characterName}|null} }
 listRaces()                                // -> filas races ordenadas por sort
 allocateStat(playerId, stat, n, actor)     // UPDATE único con guarda; n entero 1..6
 grantBonusPoints(playerId, n, actor)       // Rolepriest
 correctStat(playerId, stat, value, actor)  // Rolepriest; value 0..6; no puede dejar Σ > 8 + bonus
 setRace(playerId, raceSlug, actor)         // Rolepriest
-setMenhir(playerId, menhirId|null, actor)  // Rolepriest; solo menhires activos
+chooseMenhir(playerId, menhirSlug, actor)  // jugador: UPDATE único con guarda (menhir_chosen_at IS NULL OR menhir_chosen_at <= NOW() - INTERVAL 6 MONTH) y menhir distinto
+setMenhir(playerId, menhirSlug|null, actor) // Rolepriest: corrección sin espera (no toca menhir_chosen_at salvo al asignar)
+listMenhirs()
 updateIdentity(playerId, { characterName?, age?, gender? }, actor) // Rolepriest
-
-// menhirService.js
-listMenhirs({ includeInactive })  createMenhir({name, description}, actor)
-editMenhir(id, {name?, description?}, actor)  setMenhirActive(id, isActive, actor)
 
 // marriageService.js
 propose(fromPlayerId, toPlayerId, actor)            // -> consent_request id (usa consentService.createRequest)

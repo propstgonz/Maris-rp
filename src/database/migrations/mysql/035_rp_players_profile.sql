@@ -27,18 +27,40 @@ INSERT INTO races (slug, name, description, traits, mod_potencia, mod_intuicion,
     ('khajiita', 'Khajiita', 'Los Hombres Gato son individuos verdaderamente extraordinarios, relatados como guerreros atléticos y tan livianos que una vez impactados por las flechas estas simplemente atravesaban sus cuerpos y seguían aquellos guerreros avanzando… Hoy en día estos nativos de Elsweyr son famosos en todo lo relacionado a lo delictivo y al asesinato.', NULL, -1, 0, 0, 0, 0, 0, 2, 10);
 
 CREATE TABLE menhirs (
-    id           INT PRIMARY KEY AUTO_INCREMENT,
-    slug         VARCHAR(64) NOT NULL UNIQUE,
-    name         VARCHAR(100) NOT NULL,
-    description  TEXT DEFAULT NULL,
-    is_active    TINYINT(1) NOT NULL DEFAULT 1,
-    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id               INT PRIMARY KEY AUTO_INCREMENT,
+    slug             VARCHAR(64) NOT NULL UNIQUE,
+    name             VARCHAR(100) NOT NULL,
+    description      TEXT NOT NULL,
+    mod_potencia     TINYINT NOT NULL DEFAULT 0,
+    mod_intuicion    TINYINT NOT NULL DEFAULT 0,
+    mod_chiripa      TINYINT NOT NULL DEFAULT 0,
+    mod_autismo      TINYINT NOT NULL DEFAULT 0,
+    mod_resistencia  TINYINT NOT NULL DEFAULT 0,
+    mod_donjuanismo  TINYINT NOT NULL DEFAULT 0,
+    mod_agilidad     TINYINT NOT NULL DEFAULT 0,
+    magic_bonus      SMALLINT NOT NULL DEFAULT 0,
+    magic_to_life    TINYINT(1) NOT NULL DEFAULT 0,
+    sort             TINYINT NOT NULL
 );
+
+INSERT INTO menhirs (slug, name, description, mod_potencia, mod_intuicion, mod_chiripa, mod_autismo, mod_resistencia, mod_donjuanismo, mod_agilidad, magic_bonus, magic_to_life, sort) VALUES
+    ('guerrero', 'El Menhir del Guerrero', '+ 1 de Potencia.', 1, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+    ('ladron', 'El Menhir del Ladrón', '+ 1 de Agilidad.', 0, 0, 0, 0, 0, 0, 1, 0, 0, 2),
+    ('mago', 'El Menhir del Mago', '+ 50 de Magia.', 0, 0, 0, 0, 0, 0, 0, 50, 0, 3),
+    ('atronach', 'El Menhir del Atronach', 'Absorbe los Ataques Mágicos y recibe la mitad de Daño… Por cada 0,25 de Daño Mágico absorbido, recibe la misma cuantía en Magia sin sobrepasar el límite.', 0, 0, 0, 0, 0, 0, 0, 0, 0, 4),
+    ('amante', 'El Menhir del Amante', 'Las acciones que usan Carisma si se usan en objetivos del sexo opuesto se aumentan + 2 Puntos a la Estadística.', 0, 0, 0, 0, 0, 0, 0, 0, 0, 5),
+    ('torre', 'El Menhir de la Torre', '+ 1 de Resistencia.', 0, 0, 0, 0, 1, 0, 0, 0, 0, 6),
+    ('dama', 'El Menhir de la Dama', '+ 1 de Intuición.', 0, 1, 0, 0, 0, 0, 0, 0, 0, 7),
+    ('ritual', 'El Menhir Ritual', 'Convierte toda la Magia a Vida, dividiendo entre 100 a la cantidad de Magia (Si tiene 50 de Magia, + 0,5 de Vida.)', 0, 0, 0, 0, 0, 0, 0, 0, 1, 8),
+    ('ofidio', 'El Menhir Ofidio', 'Es inmune a las Ilusiones. + 1 de Chiripa.', 0, 0, 1, 0, 0, 0, 0, 0, 0, 9),
+    ('sombrio', 'El Menhir Sombrío', 'Una vez al Mes Off-Rol el Comulgado puede obtener Invisibilidad hasta que ejecute una acción hostil / agresiva.', 0, 0, 0, 0, 0, 0, 0, 0, 0, 10),
+    ('aprendiz', 'El Menhir del Aprendiz', '+ 1 de Autismo.', 0, 0, 0, 1, 0, 0, 0, 0, 0, 11);
 
 ALTER TABLE players
     ADD COLUMN age                    SMALLINT DEFAULT NULL,
     ADD COLUMN race_id                INT DEFAULT NULL,
     ADD COLUMN menhir_id              INT DEFAULT NULL,
+    ADD COLUMN menhir_chosen_at       DATETIME DEFAULT NULL,
     ADD COLUMN stat_potencia          TINYINT NOT NULL DEFAULT 0,
     ADD COLUMN stat_intuicion         TINYINT NOT NULL DEFAULT 0,
     ADD COLUMN stat_chiripa           TINYINT NOT NULL DEFAULT 0,

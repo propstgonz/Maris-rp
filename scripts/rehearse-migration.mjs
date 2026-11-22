@@ -28,7 +28,7 @@ const CONTRACT_TABLES = {
 
 const CONTRACT_COLUMNS = {
   'rp_players.players': [
-    'id', 'discord_id', 'username', 'character_name', 'avatar_filename', 'gender', 'age', 'race_id', 'menhir_id',
+    'id', 'discord_id', 'username', 'character_name', 'avatar_filename', 'gender', 'age', 'race_id', 'menhir_id', 'menhir_chosen_at',
     'stat_potencia', 'stat_intuicion', 'stat_chiripa', 'stat_autismo', 'stat_resistencia', 'stat_donjuanismo',
     'stat_agilidad', 'stat_bonus_points', 'free_school_claimed_at', 'is_alive', 'died_at', 'character_created_at',
     'character_reset_at', 'modmail_channel_id', 'created_at', 'updated_at',
@@ -231,6 +231,7 @@ async function main() {
     }
 
     check('10 razas', (await scalar(conn, 'SELECT COUNT(*) FROM rp_players.races')) === 10);
+    check('11 menhires', (await scalar(conn, 'SELECT COUNT(*) FROM rp_players.menhirs')) === 11);
     check('6 escuelas, 5 activas', (await scalar(conn, 'SELECT COUNT(*) FROM rp_players.schools')) === 6
       && (await scalar(conn, 'SELECT COUNT(*) FROM rp_players.schools WHERE is_active = 1')) === 5);
     check('5 niveles de dominio', (await scalar(conn, 'SELECT COUNT(*) FROM rp_players.mastery_levels')) === 5);

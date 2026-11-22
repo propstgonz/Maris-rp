@@ -22,7 +22,7 @@ Cada entrada: contexto → decisión → consecuencia. Las marcadas **[usuario]*
 
 **ADR-08 — Raza (págs. 37-39).** Se elige al crear el personaje; el jugador no la cambia; el Rolepriest puede corregirla. Los modificadores se suman a la base al calcular la estadística efectiva, que puede pasar de 6 o quedar negativa (aviso de la pág. 39).
 
-**ADR-09 [usuario] — Menhires.** El Tomegrama no los define todavía. Catálogo vacío; solo un Rolepriest asigna menhir; el perfil muestra «Pendiente». Cuando lleguen, solo hay que insertar datos.
+**ADR-09 — Menhires (Tomegrama págs. 56-57, versión actualizada).** 11 menhires en catálogo cerrado con sus efectos literales. Los +1 a una estadística se suman a la estadística efectiva (como la raza); el Menhir del Mago suma +50 a la Magia; el Menhir Ritual convierte toda la Magia en Vida (Magia/100). Atronach, Amante, Ofidio (inmunidad a Ilusiones), Sombrío: efectos narrativos, solo texto. **Elige el jugador** («El Usuario solo puede elegir 1 Menhir») y debe esperar 6 meses reales para cambiarlo (`menhir_chosen_at`). El Rolepriest puede corregirlo. Sustituye a la decisión provisional «solo Rolepriest asigna», tomada cuando el Tomegrama aún no definía los menhires.
 
 **ADR-10 [usuario] — Estado civil = matrimonio.** El Tomegrama no define estados civiles. Soltero/a por defecto; Casado/a con otro jugador registrado y vivo, por solicitud y aceptación; monógamo; divorcio por cualquiera de las partes; Viudo/a si muere el cónyuge; el Rolepriest puede anular.
 
@@ -32,9 +32,9 @@ Cada entrada: contexto → decisión → consecuencia. Las marcadas **[usuario]*
 
 **ADR-12 [usuario] — Cinco escuelas activas; Encantamiento inactiva.** El PDF habla de seis y excluye Encantamiento «hasta nuevo aviso» (pág. 51). Queda en el catálogo con `is_active = 0` y sin conjuros.
 
-**ADR-13 [usuario] — Las tiradas usan la estadística efectiva (base + raza).**
+**ADR-13 [usuario] — Las tiradas usan la estadística efectiva (base + raza + menhir).**
 
-**ADR-14 [usuario] — Escuela gratuita con Autismo efectivo ≥ 6.** Una sola vez por personaje (`free_school_claimed_at`).
+**ADR-14 [usuario] — Escuela gratuita con Autismo efectivo (base + raza + menhir) ≥ 6.** Una sola vez por personaje (`free_school_claimed_at`).
 
 **ADR-15 [usuario] — Tiradas de dominio: el Rolepriest autoriza, el bot tira.** El Rolepriest valida al mentor (puede ser NPC). Si el mentor es un jugador, el bot comprueba su nivel. Reclamación, tirada, resultado y enfriamiento van en una transacción.
 
@@ -48,7 +48,7 @@ Cada entrada: contexto → decisión → consecuencia. Las marcadas **[usuario]*
 
 **ADR-20 — Los conjuros desbloqueados se calculan, no se guardan.** El nivel de dominio implica el acceso; una tabla de desbloqueos podría desincronizarse. Calcularlo hace imposible un desbloqueo ilegítimo y mantiene la coherencia si el nivel cambia.
 
-**ADR-21 — Magia = 25 × Autismo efectivo.** Pág. 41. Con base ≤ 6 los topes 150/175/200 salen solos.
+**ADR-21 — Magia = 25 × Autismo efectivo + bono del Menhir del Mago.** Pág. 41 y 56. Con base ≤ 6 los topes 150/175/200 de la raza salen solos; el menhir los supera porque el Tomegrama lo da como bono aparte.
 
 ## Inventarios
 
@@ -77,3 +77,7 @@ Cada entrada: contexto → decisión → consecuencia. Las marcadas **[usuario]*
 **ADR-31 — Renombrado mapServer → API.** `src/mapServer.js` → `src/apiServer.js`, `src/mapServer/` → `src/api/`, servicio `rp-map-editor` → `rp-api`, variables `MAP_SERVER_*` → `API_*`. El host DNS público no cambia.
 
 **ADR-32 — Migración de datos sin pérdida de bienes.** NPCs con dueño → `player_npcs`; construcciones → `properties`; contenido de almacenes de construcciones, NPCs y facciones → inventario del dueño. Lo que estaba en el suelo del mapa (`tile_items`) se pierde: no tiene dueño.
+
+**ADR-33 — Conjuros: 75 en total.** Recontado contra el PDF: Destrucción 21, Alteración 15, Restauración 11, Ilusión 14, Conjuración 14. Las cifras 16/12/15 del plan inicial estaban mal contadas.
+
+**ADR-34 — Migraciones 035-041 corregidas antes del primer despliegue.** Se añadieron los menhires a 035 en vez de crear 042, porque 035-041 no se han aplicado nunca en producción.
