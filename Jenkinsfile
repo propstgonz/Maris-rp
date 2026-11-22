@@ -2,7 +2,7 @@ def attemptRollback() {
   def status = sh(returnStatus: true, script: '''
     set -u
     rolled=""; missing=""
-    for pair in "${IMAGE_NAME}:bot/map-editor" "${WEB_IMAGE_NAME}:web"; do
+    for pair in "${IMAGE_NAME}:bot/api" "${WEB_IMAGE_NAME}:web"; do
       image="${pair%%:*}"; label="${pair#*:}"
       if docker image inspect "${image}:rollback" > /dev/null 2>&1; then
         docker tag "${image}:rollback" "${image}:latest"
@@ -74,7 +74,7 @@ pipeline {
         sh '''
           docker info > /dev/null || (echo "Docker daemon unreachable from this agent." && exit 1)
           test -f .env || (echo ".env is missing in the workspace — docker-compose.yml requires it (env_file: .env)." && exit 1)
-          test -f config.json || (echo "config.json is missing in the workspace — bot y map-editor lo montan como volumen (roles/canales de Staff)." && exit 1)
+          test -f config.json || (echo "config.json is missing in the workspace — bot y api lo montan como volumen (roles/canales de Staff)." && exit 1)
           test -f nginx/nginx.conf || (echo "nginx/nginx.conf is missing in the workspace." && exit 1)
           docker compose config -q
 
@@ -218,7 +218,7 @@ pipeline {
     stage('Reclaim container names') {
       steps {
         sh '''
-          for name in ricardana-rp-bot ricardana-rp-map ricardana-rp-web ricardana-rp-bucket; do
+          for name in ricardana-rp-bot ricardana-rp-api ricardana-rp-web ricardana-rp-bucket; do
             cid=$(docker ps -aq -f "name=^/${name}$")
             if [ -n "$cid" ]; then
               owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || echo "")
@@ -239,7 +239,7 @@ pipeline {
             sh 'docker compose up -d --remove-orphans'
           } catch (err) {
             echo "docker compose up failed outright: ${err}"
-            sh 'docker compose logs --tail=150 rp-disc-bot rp-map-editor rp-web || true'
+            sh 'docker compose logs --tail=150 rp-disc-bot rp-api rp-web || true'
             attemptRollback()
             error("Deploy command failed for ${env.GIT_SHA} — rolled back if a previous image was available.")
           }
@@ -264,26 +264,26 @@ pipeline {
             while :; do
               attempt=$(( attempt + 1 ))
               bot_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-bot 2>/dev/null || echo false)
-              map_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-map 2>/dev/null || echo false)
+              api_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-api 2>/dev/null || echo false)
               web_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-web 2>/dev/null || echo false)
 
-              if [ "$bot_up" != "true" ] || [ "$map_up" != "true" ] || [ "$web_up" != "true" ]; then
-                echo "Intento ${attempt}: bot running=${bot_up}, map-editor running=${map_up}, web running=${web_up}."
+              if [ "$bot_up" != "true" ] || [ "$api_up" != "true" ] || [ "$web_up" != "true" ]; then
+                echo "Intento ${attempt}: bot running=${bot_up}, api running=${api_up}, web running=${web_up}."
                 exit 2
               fi
 
-              bot_ready=false; map_ok=false; web_ok=false
+              bot_ready=false; api_ok=false; web_ok=false
               if docker logs --tail=200 ricardana-rp-bot 2>&1 | grep -q 'Bot conectado como'; then bot_ready=true; fi
-              if docker exec ricardana-rp-map wget -q -O /dev/null -T 5 http://127.0.0.1:3000/ 2>/dev/null; then map_ok=true; fi
+              if docker exec ricardana-rp-api wget -q -O /dev/null -T 5 http://127.0.0.1:3000/ 2>/dev/null; then api_ok=true; fi
               if docker exec ricardana-rp-web wget -q -O /dev/null -T 5 http://127.0.0.1:4321/ 2>/dev/null; then web_ok=true; fi
 
-              if [ "$bot_ready" = true ] && [ "$map_ok" = true ] && [ "$web_ok" = true ]; then
+              if [ "$bot_ready" = true ] && [ "$api_ok" = true ] && [ "$web_ok" = true ]; then
                 echo "Health check OK en el intento ${attempt}."
                 exit 0
               fi
 
               if [ "$(date +%s)" -ge "$deadline" ]; then
-                echo "Sin confirmar tras ${attempt} intentos: bot ready=${bot_ready}, map-editor HTTP ok=${map_ok}, web HTTP ok=${web_ok}."
+                echo "Sin confirmar tras ${attempt} intentos: bot ready=${bot_ready}, api HTTP ok=${api_ok}, web HTTP ok=${web_ok}."
                 exit 3
               fi
               sleep 2
@@ -292,14 +292,14 @@ pipeline {
 
           if (status == 2) {
             echo 'Un contenedor se ha caído tras el deploy — intentando rollback automático.'
-            sh 'docker compose logs --tail=150 rp-disc-bot rp-map-editor rp-web || true'
+            sh 'docker compose logs --tail=150 rp-disc-bot rp-api rp-web || true'
             attemptRollback()
             error("Deploy de ${env.GIT_SHA} ha tumbado un contenedor tras arrancar — ver logs arriba.")
           }
 
           if (status == 3) {
-            echo "Contenedores en marcha pero no confirmados como listos en 30s — revisa 'docker compose logs rp-disc-bot rp-map-editor rp-web' en el host. No se falla el build por esto."
-            sh 'docker compose logs --tail=80 rp-disc-bot rp-map-editor rp-web || true'
+            echo "Contenedores en marcha pero no confirmados como listos en 30s — revisa 'docker compose logs rp-disc-bot rp-api rp-web' en el host. No se falla el build por esto."
+            sh 'docker compose logs --tail=80 rp-disc-bot rp-api rp-web || true'
           }
         }
       }
@@ -311,7 +311,7 @@ pipeline {
       sh 'docker image prune -f --filter "dangling=true" || true'
     }
     success {
-      echo "rpdiscbot desplegado (bot + map-editor + web) — commit ${env.GIT_SHA}."
+      echo "rpdiscbot desplegado (bot + api + web) — commit ${env.GIT_SHA}."
     }
     failure {
       echo 'Build failed, or the deploy crashed and was rolled back — see the failed stage above for details.'

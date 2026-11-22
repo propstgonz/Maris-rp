@@ -1,7 +1,5 @@
 
 
-
-
 import { escapeHtml } from './html';
 import { apiFetch } from './api';
 
@@ -37,7 +35,7 @@ export function initTerminal(root: HTMLElement) {
       const result = await apiFetch<{ output: string }>('/api/terminal/command', { method: 'POST', body: { commandLine } });
       cmdOutput.textContent = `$ ${commandLine}\n\n${result.output}`;
     } catch (err) {
-      cmdOutput.textContent = `$ ${commandLine}\n\n❌ ${err instanceof Error ? err.message : 'Error desconocido.'}`;
+      cmdOutput.textContent = `$ ${commandLine}\n\n${err instanceof Error ? err.message : 'Error desconocido.'}`;
     }
   });
 
@@ -53,7 +51,7 @@ export function initTerminal(root: HTMLElement) {
       const result = await apiFetch<SqlResult>('/api/terminal/sql', { method: 'POST', body: { query } });
       sqlOutput.innerHTML = sqlResultTableHtml(result);
     } catch (err) {
-      sqlOutput.innerHTML = `<p class="hint">❌ ${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
+      sqlOutput.innerHTML = `<p class="hint">${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
     }
   });
 
@@ -69,7 +67,7 @@ export function initTerminal(root: HTMLElement) {
       if (!message) return;
       const images = [...(broadcastImages.files ?? [])];
       if (images.length > MAX_BROADCAST_IMAGES) {
-        broadcastOutput.textContent = `❌ Como mucho ${MAX_BROADCAST_IMAGES} imágenes (has seleccionado ${images.length}).`;
+        broadcastOutput.textContent = `Como mucho ${MAX_BROADCAST_IMAGES} imágenes (has seleccionado ${images.length}).`;
         return;
       }
 
@@ -81,10 +79,10 @@ export function initTerminal(root: HTMLElement) {
         body.append('message', message);
         for (const img of images) body.append('imagenes', img);
         const result = await apiFetch<{ sent: number; failed: number; totalTargets: number }>('/api/broadcast', { method: 'POST', body });
-        broadcastOutput.textContent = `✅ Entregados: ${result.sent}/${result.totalTargets}${result.failed > 0 ? ` (${result.failed} fallidos)` : ''}`;
+        broadcastOutput.textContent = `Entregados: ${result.sent}/${result.totalTargets}${result.failed > 0 ? ` (${result.failed} fallidos)` : ''}`;
         broadcastForm.reset();
       } catch (err) {
-        broadcastOutput.textContent = `❌ ${err instanceof Error ? err.message : 'Error desconocido.'}`;
+        broadcastOutput.textContent = `${err instanceof Error ? err.message : 'Error desconocido.'}`;
       } finally {
         submitBtn.disabled = false;
       }

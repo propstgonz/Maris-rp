@@ -19,10 +19,10 @@ export function initModmailCategories(root: HTMLElement) {
     status.textContent = 'Creando en Discord…';
     try {
       await apiFetch('/api/modmail-categories', { method: 'POST', body: { name } });
-      status.textContent = '✅ Categoría creada — recargando…';
+      status.textContent = 'Categoría creada — recargando…';
       window.location.reload();
     } catch (err) {
-      status.textContent = `❌ ${err instanceof Error ? err.message : 'Error desconocido.'}`;
+      status.textContent = `${err instanceof Error ? err.message : 'Error desconocido.'}`;
       submitBtn.disabled = false;
     }
   });

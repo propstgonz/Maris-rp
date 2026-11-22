@@ -10,15 +10,15 @@ process.env.CLIENT_ID = 'ci-fake-client-id';
 process.env.DISCORD_CLIENT_SECRET = 'ci-fake-secret';
 process.env.GUILD_ID = 'ci-fake-guild-id';
 process.env.DISCORD_TOKEN = 'ci-fake-token';
-process.env.MAP_SERVER_PUBLIC_URL = 'http://localhost:3000';
-process.env.MAP_SERVER_SESSION_SECRET = 'ci-fake-session-secret';
-process.env.MAP_SERVER_PORT = '0';
+process.env.API_PUBLIC_URL = 'http://localhost:3000';
+process.env.API_SESSION_SECRET = 'ci-fake-session-secret';
+process.env.API_PORT = '0';
 process.env.NGINX_BASE_URL = 'https://rp-bucket.example.com';
 
 let server;
 try {
-  const { app } = await import('../src/mapServer.js');
-  check('src/mapServer.js se importa sin lanzar (migraciones + rutas OK)', true);
+  const { app } = await import('../src/apiServer.js');
+  check('src/apiServer.js se importa sin lanzar (migraciones + rutas OK)', true);
 
   const { whenReady } = await import('../src/database/index.js');
   await whenReady;
@@ -48,6 +48,12 @@ try {
 
   const me = await get('/api/me');
   check('GET /api/me sin sesión responde 401', me.statusCode === 401);
+
+  const tiles = await get('/api/tiles');
+  check('GET /api/tiles responde 404 (el mapa ya no existe)', tiles.statusCode === 404);
+
+  const mapa = await get('/api/mapamundi/vista');
+  check('GET /api/mapamundi/vista responde 404', mapa.statusCode === 404);
 } catch (err) {
   fail++;
   console.error('❌ El servidor no ha arrancado o ha lanzado una excepción:', err);

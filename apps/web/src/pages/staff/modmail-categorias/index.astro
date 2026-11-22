@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
-import { fetchModmailCategories, MapServerApiError } from '../../../lib/mapServerApi';
+import { fetchModmailCategories, ApiError } from '../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
 if (guard instanceof Response) return guard;
@@ -12,7 +12,7 @@ let loadError: string | null = null;
 try {
   categories = await fetchModmailCategories(Astro);
 } catch (err) {
-  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la lista de categorías.';
+  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar la lista de categorías.';
 }
 ---
 <BaseLayout title="Categorías de modmail">
@@ -35,7 +35,7 @@ try {
     </form>
 
     {loadError ? (
-      <p class="hint">❌ {loadError}</p>
+      <p class="hint">{loadError}</p>
     ) : categories.length === 0 ? (
       <p class="hint">Todavía no hay ninguna categoría registrada.</p>
     ) : (
@@ -47,7 +47,7 @@ try {
               {categories.map(c => (
                 <tr>
                   <td>{c.exists ? `#${c.displayName}` : <><s>{c.displayName}</s> <span class="hint">(ya no existe en Discord)</span></>}</td>
-                  <td>{c.channelCount}/{c.maxChannels}{c.channelCount >= c.maxChannels ? ' 🔴 LLENA' : ''}</td>
+                  <td>{c.channelCount}/{c.maxChannels}{c.channelCount >= c.maxChannels ? ' LLENA' : ''}</td>
                   <td>{new Date(c.createdAt).toLocaleString('es-ES')}</td>
                 </tr>
               ))}

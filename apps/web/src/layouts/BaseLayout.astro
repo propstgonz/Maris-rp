@@ -8,22 +8,14 @@ interface Props {
 }
 
 const { title } = Astro.props;
-const { user } = Astro.locals;
+const sessionUser = Astro.locals.user;
+const user = sessionUser?.isRolepriest ? sessionUser : null;
 
 const DRAWER_LINKS = [
-  { path: '/staff', icon: 'home', label: 'Inicio' },
-  { path: '/staff/mapa', icon: 'map', label: 'Mapa', accent: '#4fd18a' },
-  { path: '/staff/items', icon: 'package', label: 'Ítems', accent: '#e0b34d' },
-  { path: '/staff/terrain-types', icon: 'globe', label: 'Terrenos', accent: '#a9b665' },
-  { path: '/staff/zonas', icon: 'zone', label: 'Zonas', accent: '#5cc0b0' },
-  { path: '/staff/construction-types', icon: 'building', label: 'Construcciones', accent: '#e0964d' },
-  { path: '/staff/npc-types', icon: 'skull', label: 'NPCs', accent: '#b58ee0' },
-  { path: '/staff/effect-types', icon: 'sparkles', label: 'Estados', accent: '#d97fb0' },
-  { path: '/staff/facciones', icon: 'flag', label: 'Facciones', accent: '#6f9fd8' },
+  { path: '/staff', icon: 'home', label: 'Inicio', accent: '#4fd18a' },
   { path: '/staff/players', icon: 'users', label: 'Jugadores', accent: '#6fc3d8' },
   { path: '/staff/audit-log', icon: 'scroll', label: 'Registro', accent: '#bfae8a' },
-  { path: '/staff/mechanics', icon: 'settings', label: 'Mecánicas', accent: '#9a9a9a' },
-  { path: '/staff/terminal', icon: 'terminal', label: 'Terminal', accent: '#4fd18a' },
+  { path: '/staff/terminal', icon: 'terminal', label: 'Terminal', accent: '#b58ee0' },
   { path: '/staff/backups', icon: 'save', label: 'Backups', accent: '#8f8fd8' },
   { path: '/staff/modmail-categorias', icon: 'folder', label: 'Categorías', accent: '#c9a86b' },
   { path: '/staff/docs', icon: 'book', label: 'Guía de Staff', accent: '#93a3b8' },
@@ -54,17 +46,11 @@ function isActive(path: string): boolean {
       <header class="topbar">
         <button id="menuToggle" class="btn-menu" title="Menú" aria-label="Abrir menú" set:html={icon('menu')} />
         <a href="/staff" class="topbar-title">
-          <Fragment set:html={icon('map')} />
+          <Fragment set:html={icon('home')} />
           Ricardana RP
         </a>
 
-        <slot name="mapControls" />
-
         <div class="topbar-user">
-          <a href="/" class="btn-worldmap" title="Volver al juego (lo que ve un jugador)">
-            <Fragment set:html={icon('crosshair', { size: 15 })} />
-            <span class="btn-worldmap-label">Volver al juego</span>
-          </a>
           <span id="liveClock" class="live-clock" title="Hora actual (del navegador)"></span>
           <span id="lastRefreshLabel" class="last-refresh" title="Última actualización de esta página — se refresca sola cada 30s, o al momento si otro Rolepriest cambia algo desde la web"></span>
           <span id="userLabel">
@@ -82,7 +68,7 @@ function isActive(path: string): boolean {
       <nav id="drawer" class="drawer">
         <div class="drawer-header">
           <span class="drawer-brand">
-            <Fragment set:html={icon('map')} />
+            <Fragment set:html={icon('home')} />
             Ricardana RP
           </span>
           <button id="drawerClose" class="btn-icon" aria-label="Cerrar menú" set:html={icon('x')} />
@@ -112,13 +98,25 @@ function isActive(path: string): boolean {
   ) : (
     <body class="login-body">
       <main class="login-card">
-        <div class="login-emoji" set:html={icon('map', { size: 34 })} />
+        <div class="login-emoji" set:html={icon('home', { size: 34 })} />
         <h1>Panel de administración</h1>
-        <p>Ricardana RP — panel de Rolepriests. Inicia sesión con tu cuenta de Discord; para jugar, entra por la <a href="/">página principal</a>.</p>
-        <a class="btn-discord" href="/auth/login">
-          <Fragment set:html={discordMark({ size: 20 })} />
-          Entrar con Discord
-        </a>
+        {sessionUser ? (
+          <Fragment>
+            <p>Ricardana RP — este panel es solo para Rolepriests. La cuenta {sessionUser.username} no tiene ese rol.</p>
+            <a class="btn-discord" href="/auth/logout">
+              <Fragment set:html={icon('log-out', { size: 20 })} />
+              Cerrar sesión
+            </a>
+          </Fragment>
+        ) : (
+          <Fragment>
+            <p>Ricardana RP — panel de Rolepriests. Inicia sesión con tu cuenta de Discord.</p>
+            <a class="btn-discord" href="/auth/login">
+              <Fragment set:html={discordMark({ size: 20 })} />
+              Entrar con Discord
+            </a>
+          </Fragment>
+        )}
       </main>
     </body>
   )}

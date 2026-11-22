@@ -7,8 +7,6 @@ export interface SessionUser {
   username: string;
   avatar: string | null;
   isRolepriest: boolean;
-  hasCharacter: boolean;
-  maxRangeTiles: number;
   csrfToken: string;
   idleLogoutMinutes: number;
 }
@@ -22,10 +20,10 @@ declare global {
   }
 }
 
-const MAP_SERVER_INTERNAL_URL = (process.env.MAP_SERVER_INTERNAL_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+const API_INTERNAL_URL = (process.env.API_INTERNAL_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  context.locals.apiBase = MAP_SERVER_INTERNAL_URL;
+  context.locals.apiBase = API_INTERNAL_URL;
 
   if (SKIP_PREFIXES.some(p => context.url.pathname.startsWith(p))) {
     context.locals.user = null;
@@ -44,7 +42,7 @@ const SESSION_TIMEOUT_MS = 5000;
 async function resolveSession(cookie: string): Promise<SessionUser | null> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const res = await fetch(`${MAP_SERVER_INTERNAL_URL}/api/me`, {
+      const res = await fetch(`${API_INTERNAL_URL}/api/me`, {
         headers: { cookie },
         signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
       });
@@ -57,7 +55,7 @@ async function resolveSession(cookie: string): Promise<SessionUser | null> {
       }
     } catch (err) {
       if (attempt === 2 || (err as Error).name === 'TimeoutError') {
-        console.error(`[middleware] No se pudo resolver la sesión vía ${MAP_SERVER_INTERNAL_URL}/api/me: ${(err as Error).message}`);
+        console.error(`[middleware] No se pudo resolver la sesión vía ${API_INTERNAL_URL}/api/me: ${(err as Error).message}`);
         return null;
       }
     }

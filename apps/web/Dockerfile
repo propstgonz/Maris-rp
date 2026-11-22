@@ -6,8 +6,8 @@
 # Ver docs/plan.md §2.5.
 #
 # node:22-alpine por consistencia con el Dockerfile de la raíz (bot/
-# map-editor) — esta imagen no necesita compilar nada nativo, porque esta
-# app nunca toca la BD directamente: todo pasa por fetch() a mapServer.js.
+# api) — esta imagen no necesita compilar nada nativo, porque esta
+# app nunca toca la BD directamente: todo pasa por fetch() a apiServer.js.
 # Por eso no hace falta python3/make/g++ que sí lleva el de la raíz.
 
 FROM node:22-alpine AS builder

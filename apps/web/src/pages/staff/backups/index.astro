@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
-import { fetchBackups, fetchBackupSchedule, MapServerApiError } from '../../../lib/mapServerApi';
+import { fetchBackups, fetchBackupSchedule, ApiError } from '../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
 if (guard instanceof Response) return guard;
@@ -13,7 +13,7 @@ let loadError: string | null = null;
 try {
   [backups, { cron }] = await Promise.all([fetchBackups(Astro), fetchBackupSchedule(Astro)]);
 } catch (err) {
-  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la lista de backups.';
+  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar la lista de backups.';
 }
 
 function formatSize(bytes: number): string {
@@ -82,7 +82,7 @@ const KIND_LABELS: Record<string, string> = {
     <p class="hint" data-backup-cron-preview></p>
 
     {loadError ? (
-      <p class="hint">❌ {loadError}</p>
+      <p class="hint">{loadError}</p>
     ) : backups.length === 0 ? (
       <p class="hint">Todavía no hay ningún backup — se creará el primero en el próximo arranque del bot o en la próxima ejecución programada.</p>
     ) : (

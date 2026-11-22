@@ -14,10 +14,3 @@ export function requireRolepriest(Astro: AstroGlobal): SessionUser | Response {
   }
   return guard;
 }
-
-export function requireCharacter(Astro: AstroGlobal): SessionUser | Response {
-  const guard = requireUser(Astro);
-  if (guard instanceof Response) return guard;
-  if (!guard.hasCharacter) return Astro.redirect('/');
-  return guard;
-}

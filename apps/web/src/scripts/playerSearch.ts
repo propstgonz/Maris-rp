@@ -4,67 +4,48 @@ import { statusPillHtml } from './statusPill';
 import { showConfirm, showToast } from './ui';
 import { apiFetch } from './api';
 import { initLiveUpdates } from './liveUpdates';
-import type { PlayerSearchPage } from '../lib/mapServerApi';
+import type { PlayerRow } from '../lib/apiClient';
+
+const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
 export function initPlayerSearch(root: HTMLElement) {
   const searchInput = root.querySelector<HTMLInputElement>('[data-player-search-input]')!;
   const results = root.querySelector<HTMLElement>('[data-player-search-results]')!;
   const syncBtn = root.querySelector<HTMLButtonElement>('[data-sync-channels-btn]')!;
 
-  let searchTimer: ReturnType<typeof setTimeout> | undefined;
-  let searchPage = 1;
+  let players: PlayerRow[] = [];
 
-  async function runPlayerSearch(query: string, page = searchPage) {
-    let data: PlayerSearchPage;
-    try {
-      data = await apiFetch<PlayerSearchPage>(`/api/players/search?q=${encodeURIComponent(query.trim())}&page=${page}`);
-    } catch (err) {
-      results.innerHTML = `<p class="hint">❌ ${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
-      return;
-    }
-    const { rows, total, pageSize } = data;
-    searchPage = data.page;
-
+  function render() {
+    const q = searchInput.value.trim().toLowerCase();
+    const rows = players.filter(p =>
+      !q || p.username.toLowerCase().includes(q) || (p.character_name ?? '').toLowerCase().includes(q) || p.discord_id.includes(q));
     if (rows.length === 0) {
-      results.innerHTML = searchPage > 1
-        ? '<p class="hint">Esta página no tiene resultados.</p>'
-        : '<p class="hint">Sin resultados.</p>';
+      results.innerHTML = '<p class="hint">Sin resultados.</p>';
       return;
     }
-
-    const rowsHtml = rows.map((r, i) => `
-      <tr data-idx="${i}">
+    const rowsHtml = rows.map(r => `
+      <tr>
         <td><img class="player-avatar" src="/api/discord-avatar/${encodeURIComponent(r.discord_id)}" alt=""></td>
-        <td>${escapeHtml(r.username)}</td>
         <td>${escapeHtml(r.character_name ?? '—')}</td>
-        <td>${statusPillHtml(!!r.is_alive, r.hp)}</td>
-        <td class="row-actions"><button type="button" class="btn-icon btn-view-player" title="Ver">${icon('eye', { size: 15 })}</button></td>
+        <td>${escapeHtml(r.username)}</td>
+        <td>${statusPillHtml(!!r.is_alive)}</td>
+        <td>${escapeHtml(r.character_created_at ? dateFmt.format(new Date(r.character_created_at)) : '—')}</td>
+        <td class="row-actions"><a class="btn-icon" href="/staff/players/${encodeURIComponent(r.discord_id)}" title="Ver">${icon('eye', { size: 15 })}</a></td>
       </tr>`).join('');
-
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const paginationHtml = `
-      <div class="pagination">
-        <button type="button" data-players-prev-page ${searchPage <= 1 ? 'disabled' : ''}>← Anterior</button>
-        <span class="pagination-info">Página ${searchPage} de ${totalPages} (${total} en total)</span>
-        <button type="button" data-players-next-page ${searchPage >= totalPages ? 'disabled' : ''}>Siguiente →</button>
-      </div>`;
-
-    results.innerHTML = `<div class="admin-table-scroll"><table class="admin-table"><thead><tr><th></th><th>Usuario</th><th>Personaje</th><th>Estado</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>${paginationHtml}`;
-    results.querySelectorAll<HTMLButtonElement>('.btn-view-player').forEach(btn => {
-      const row = rows[Number(btn.closest<HTMLElement>('tr')!.dataset.idx)];
-      btn.onclick = () => { window.location.href = `/staff/players/${encodeURIComponent(row.discord_id)}`; };
-    });
-
-    const currentQuery = searchInput.value ?? query;
-    results.querySelector<HTMLButtonElement>('[data-players-prev-page]')!.onclick = () => runPlayerSearch(currentQuery, searchPage - 1);
-    results.querySelector<HTMLButtonElement>('[data-players-next-page]')!.onclick = () => runPlayerSearch(currentQuery, searchPage + 1);
+    results.innerHTML = `<div class="admin-table-scroll"><table class="admin-table"><thead><tr><th></th><th>Personaje</th><th>Usuario</th><th>Estado</th><th>Creado</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
   }
 
-  searchInput.addEventListener('input', evt => {
-    clearTimeout(searchTimer);
-    const q = (evt.target as HTMLInputElement).value;
-    searchTimer = setTimeout(() => { searchPage = 1; runPlayerSearch(q); }, 250);
-  });
+  async function load() {
+    try {
+      players = await apiFetch<PlayerRow[]>('/api/players');
+    } catch (err) {
+      results.innerHTML = `<p class="hint">${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
+      return;
+    }
+    render();
+  }
+
+  searchInput.addEventListener('input', render);
 
   syncBtn.addEventListener('click', async () => {
     const ok = await showConfirm({
@@ -92,6 +73,6 @@ export function initPlayerSearch(root: HTMLElement) {
     }
   });
 
-  runPlayerSearch('');
-  initLiveUpdates('players', () => runPlayerSearch(searchInput.value));
+  load();
+  initLiveUpdates('players', load);
 }
