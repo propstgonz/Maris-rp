@@ -1,20 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { Events } from 'discord.js';
 import logger from '../utils/logger.js';
 import { getPlayerByDiscordId } from '../services/playerService.js';
@@ -23,7 +8,6 @@ import { markDeceased } from '../services/characterLifecycleService.js';
 export default {
   name: Events.GuildMemberRemove,
   once: false,
-
 
   async execute(member, client) {
     const discordId = member.id;

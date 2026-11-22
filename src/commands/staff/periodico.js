@@ -1,13 +1,5 @@
 
 
-
-
-
-
-
-
-
-
 import { SlashCommandBuilder, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { getSetting, setSetting } from '../../services/settingsService.js';
 import { requireRolepriest } from '../../utils/permissions.js';
@@ -32,7 +24,6 @@ export default {
             .setRequired(true)
         )
     ),
-
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;

@@ -12,13 +12,12 @@ import logger from '../utils/logger.js';
 import { logAction } from '../services/auditLogService.js';
 
 export const PRINTING_PRESS_NS = 'imprenta';
-export const PRINTING_PRESS_TYPE_NAME = 'imprenta';
 
-export async function announcePrintingPressBuilt(interaction, discordId, constructionId) {
+export async function announcePrintingPressBuilt(interaction, discordId, pressRef) {
   if (!interaction.guild) return;
 
   const button = new ButtonBuilder()
-    .setCustomId(buildCustomId({ ns: PRINTING_PRESS_NS, action: 'open_modal', owner: discordId, ctx: String(constructionId) }))
+    .setCustomId(buildCustomId({ ns: PRINTING_PRESS_NS, action: 'open_modal', owner: discordId, ctx: String(pressRef) }))
     .setLabel('Crear periódico')
     .setEmoji('🗞️')
     .setStyle(ButtonStyle.Primary);
@@ -29,9 +28,9 @@ export async function announcePrintingPressBuilt(interaction, discordId, constru
   }).catch(err => logger.warn(`[PrintingPress] No se pudo anunciar la imprenta: ${err.message}`));
 }
 
-function _buildPeriodicoNameModal(discordId, constructionId) {
+function _buildPeriodicoNameModal(discordId, pressRef) {
   return new ModalBuilder()
-    .setCustomId(buildCustomId({ ns: PRINTING_PRESS_NS, action: 'submit', owner: discordId, ctx: String(constructionId) }))
+    .setCustomId(buildCustomId({ ns: PRINTING_PRESS_NS, action: 'submit', owner: discordId, ctx: String(pressRef) }))
     .setTitle('Nombre de tu periódico')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -67,7 +66,7 @@ export async function handlePrintingPressComponent(interaction, parsed) {
   logAction({
     source: 'discord', actorDiscordId: interaction.user.id, actorUsername: interaction.user.tag,
     action: 'player.printing_press_channel', target: channel.id,
-    details: { channelName: channel.name, constructionId: parsed.ctx },
+    details: { channelName: channel.name },
   });
 
   return interaction.reply({

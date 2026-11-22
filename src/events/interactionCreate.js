@@ -1,10 +1,5 @@
 import { Events, MessageFlags } from 'discord.js';
 import logger from '../utils/logger.js';
-import { isFactionButton, handleFactionButton } from '../services/factionNotificationService.js';
-import { isCraftChoiceButton, handleCraftChoiceButton } from '../commands/player/craft.js';
-import { isNpcEncounterButton, handleNpcEncounterButton, isNpcGroupEncounterButton, handleNpcGroupEncounterButton } from '../services/npcEncounterService.js';
-import { isTradeConsentButton, handleTradeConsentButton } from '../services/tradeConsentService.js';
-import { isRobberyButton, handleRobberyButton } from '../services/robberyService.js';
 import { parseCustomId, assertComponentAccess } from '../utils/componentAuth.js';
 import { COMPONENT_HANDLERS } from '../components/registry.js';
 import { UserFacingError } from '../utils/errors.js';
@@ -39,14 +34,7 @@ export default {
       const parsed = parseCustomId(interaction.customId);
       const handler = parsed ? COMPONENT_HANDLERS[parsed.ns] : null;
 
-      const isFaction  = !parsed && isFactionButton(interaction.customId);
-      const isCraft    = !parsed && isCraftChoiceButton(interaction.customId);
-      const isNpcEnc   = !parsed && isNpcEncounterButton(interaction.customId);
-      const isNpcGroupEnc = !parsed && isNpcGroupEncounterButton(interaction.customId);
-      const isTrade    = !parsed && isTradeConsentButton(interaction.customId);
-      const isRobbery  = !parsed && isRobberyButton(interaction.customId);
-
-      if (!handler && !isFaction && !isCraft && !isNpcEnc && !isNpcGroupEnc && !isTrade && !isRobbery) return;
+      if (!handler) return;
 
       if (!isDatabaseReady()) {
         await interaction.reply(STARTING_UP_MESSAGE).catch(() => {});
@@ -54,16 +42,9 @@ export default {
       }
 
       try {
-        if (handler) {
-          const ttlMs = typeof handler.ttlMs === 'function' ? handler.ttlMs(parsed) : handler.ttlMs;
-          assertComponentAccess(interaction, parsed, { ttlMs });
-          await handler.handle(interaction, parsed);
-        } else if (isFaction) await handleFactionButton(interaction);
-        else if (isCraft) await handleCraftChoiceButton(interaction);
-        else if (isNpcEnc) await handleNpcEncounterButton(interaction);
-        else if (isNpcGroupEnc) await handleNpcGroupEncounterButton(interaction);
-        else if (isTrade) await handleTradeConsentButton(interaction);
-        else await handleRobberyButton(interaction);
+        const ttlMs = typeof handler.ttlMs === 'function' ? handler.ttlMs(parsed) : handler.ttlMs;
+        assertComponentAccess(interaction, parsed, { ttlMs });
+        await handler.handle(interaction, parsed);
       } catch (err) {
         const isUserFacing = err instanceof UserFacingError;
         if (!isUserFacing) {

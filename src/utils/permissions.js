@@ -18,9 +18,7 @@ try {
   process.exit(1);
 }
 
-const ROLE_STAFF      = config.roles?.staff      ?? [];
-const ROLE_MAP_PRIEST = config.roles?.mapPriest  ?? [];
-const ROLE_ROLEPRIEST = [...new Set([...ROLE_STAFF, ...ROLE_MAP_PRIEST])];
+const ROLE_ROLEPRIEST = [...new Set(config.roles?.staff ?? [])];
 
 const SQL_GET_CHARACTER_CREATED_AT = `SELECT character_created_at FROM ${T.players} WHERE discord_id = ?`;
 
@@ -67,8 +65,7 @@ export async function requireCharacter(interaction) {
 
   await interaction.reply({
     content:
-      '👤 Todavía no tienes un personaje. Usa `/personaje crear` para empezar a rolear ' +
-      '(nombre completo, nacionalidad y, si quieres, una foto).',
+      '👤 Todavía no tienes un personaje. Usa `/personaje crear` para empezar a rolear.',
     flags: MessageFlags.Ephemeral,
   });
   return false;
@@ -84,13 +81,5 @@ export function resolveEffectivePermission(command, subcommandName = null) {
 }
 
 export { config };
-
-export const MAX_HP     = config.game?.maxHp     ?? 10;
-export const MAX_HUNGER = config.game?.maxHunger ?? 10;
-
-export const SURRENDER_SURVIVAL_PERCENT = config.game?.surrenderSurvivalPercent ?? 75;
-export const SURRENDER_LOOT_MIN_ITEMS   = config.game?.surrenderLootMinItems    ?? 1;
-export const SURRENDER_LOOT_MAX_ITEMS   = config.game?.surrenderLootMaxItems    ?? 3;
-export const BREEDING_COOLDOWN_HOURS    = config.game?.breedingCooldownHours    ?? 24;
 
 export { ROLE_ROLEPRIEST };

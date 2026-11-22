@@ -9,13 +9,6 @@ export function slugify(text) {
   );
 }
 
-export function originPhrase(nationality, originCountry) {
-  if (nationality && originCountry) return `${nationality}, natural de ${originCountry}`;
-  if (nationality) return nationality;
-  if (originCountry) return `natural de ${originCountry}`;
-  return '*Sin dato*';
-}
-
 export const GENDER_CHOICES = [
   { name: 'Hombre', value: 'hombre' },
   { name: 'Mujer',  value: 'mujer' },

@@ -1,23 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { sendBroadcast } from '../../services/broadcastService.js';
 import { requireRolepriest } from '../../utils/permissions.js';
@@ -45,7 +27,6 @@ for (let i = 1; i <= MAX_IMAGES; i++) {
 
 export default {
   data,
-
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;

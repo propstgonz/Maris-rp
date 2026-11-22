@@ -1,24 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { Events } from 'discord.js';
 import logger from '../utils/logger.js';
 import { getPlayerByDiscordId } from '../services/playerService.js';
@@ -29,17 +10,11 @@ export default {
   name: Events.GuildMemberAdd,
   once: false,
 
-
   async execute(member, client) {
     logger.info(
       `[MemberAdd] Nuevo miembro: ${member.user.tag} (${member.id}) ` +
       `→ guild: ${member.guild.name}`
     );
-
-
-
-
-
 
     const player = await getPlayerByDiscordId(member.id);
     if (!player?.character_created_at || player.is_alive) return;

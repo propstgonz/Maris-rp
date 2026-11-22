@@ -2,12 +2,11 @@ import 'dotenv/config';
 
 import { Client, GatewayIntentBits, Partials, Collection } from 'discord.js';
 
-import { closePool, whenReady } from './database/index.js';
+import { closePool } from './database/index.js';
 
 import logger            from './utils/logger.js';
 import { loadCommands }  from './loaders/commandLoader.js';
 import { loadEvents }    from './loaders/eventLoader.js';
-import { seedStarterGrid } from './services/mapService.js';
 
 const client = new Client({
   intents: [
@@ -47,10 +46,6 @@ async function bootstrap() {
   logger.info('Conectando a Discord…');
   await client.login(process.env.DISCORD_TOKEN);
 
-  whenReady.then(seedStarterGrid).catch(err => {
-    logger.error(`[Bootstrap] Fallo sembrando el grid inicial: ${err.message}`);
-    console.error(err);
-  });
 }
 
 async function shutdown(signal) {
