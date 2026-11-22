@@ -1,0 +1,17 @@
+.git
+.claude
+node_modules
+apps/web
+data
+.env
+/.env.example
+/config.json
+*.log
+.DS_Store
+.vscode
+.idea
+/docker-compose.yml
+/Jenkinsfile
+/*.md
+/*.html
+nginx

@@ -1,0 +1,117 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { fetchBackups, fetchBackupSchedule, MapServerApiError } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let backups: Awaited<ReturnType<typeof fetchBackups>> = [];
+let cron = '';
+let loadError: string | null = null;
+try {
+  [backups, { cron }] = await Promise.all([fetchBackups(Astro), fetchBackupSchedule(Astro)]);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la lista de backups.';
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const KIND_LABELS: Record<string, string> = {
+  'full': 'Base de datos + bucket de imágenes',
+  'legacy-db': 'Base de datos (formato antiguo)',
+  'legacy-bucket': 'Bucket de imágenes (formato antiguo)',
+};
+---
+<BaseLayout title="Backups">
+  <div class="catalog-view" data-backups-root>
+    <div class="catalog-toolbar">
+      <h2><Fragment set:html={icon('save')} />Backups</h2>
+      <button type="button" class="btn-secondary" data-run-backup-btn>
+        <Fragment set:html={icon('play', { size: 15 })} />Generar ahora
+      </button>
+    </div>
+    <p class="hint">Cada copia es un único <code>.zip</code> con la base de datos y el bucket de imágenes (avatares, ítems, construcciones, NPCs) dentro — se genera sola según el horario de abajo y al arrancar el bot; solo se conservan las más recientes.</p>
+
+    <div class="field-row">
+      <label>Frecuencia
+        <select data-backup-freq-select>
+          <option value="hourly">Cada varias horas</option>
+          <option value="daily">Una vez al día</option>
+          <option value="weekly">Una vez a la semana</option>
+          <option value="advanced">Avanzado (cron)</option>
+        </select>
+      </label>
+      <label data-backup-hourly-fields class="hidden">Cada
+        <select data-backup-hours-select>
+          <option value="1">1 hora</option>
+          <option value="2">2 horas</option>
+          <option value="3">3 horas</option>
+          <option value="4">4 horas</option>
+          <option value="6">6 horas</option>
+          <option value="8">8 horas</option>
+          <option value="12">12 horas</option>
+        </select>
+      </label>
+      <label data-backup-weekly-fields class="hidden">Día
+        <select data-backup-weekday-select>
+          <option value="1">Lunes</option>
+          <option value="2">Martes</option>
+          <option value="3">Miércoles</option>
+          <option value="4">Jueves</option>
+          <option value="5">Viernes</option>
+          <option value="6">Sábado</option>
+          <option value="0">Domingo</option>
+        </select>
+      </label>
+      <label data-backup-time-fields>Hora (UTC)
+        <input type="time" data-backup-time-input value="23:30" />
+      </label>
+      <label data-backup-advanced-fields class="hidden">Expresión cron (UTC)
+        <input type="text" data-backup-cron-input value={cron} placeholder="30 23 * * *" />
+      </label>
+      <button type="button" class="btn-secondary" data-save-schedule-btn>
+        <Fragment set:html={icon('save', { size: 15 })} />Guardar horario
+      </button>
+    </div>
+    <p class="hint" data-backup-cron-preview></p>
+
+    {loadError ? (
+      <p class="hint">❌ {loadError}</p>
+    ) : backups.length === 0 ? (
+      <p class="hint">Todavía no hay ningún backup — se creará el primero en el próximo arranque del bot o en la próxima ejecución programada.</p>
+    ) : (
+      <div class="admin-table-wrap">
+        <div class="admin-table-scroll">
+          <table class="admin-table" data-backups-table>
+            <thead><tr><th>Creado</th><th>Contenido</th><th>Tamaño</th><th>Descargar</th></tr></thead>
+            <tbody>
+              {backups.map(b => (
+                <tr>
+                  <td>{new Date(b.createdAt).toLocaleString('es-ES')}</td>
+                  <td>{KIND_LABELS[b.kind] ?? b.filename}</td>
+                  <td><code>{formatSize(b.sizeBytes)}</code></td>
+                  <td class="row-actions">
+                    <a class="btn-icon" href={`/api/backups/${encodeURIComponent(b.filename)}`} title={`Descargar ${b.filename}`} set:html={icon('download', { size: 15 })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initBackups } from '../../../scripts/backups';
+  const root = document.querySelector<HTMLElement>('[data-backups-root]');
+  if (root) initBackups(root);
+</script>

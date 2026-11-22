@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { jsonIsland } from '../../../lib/jsonIsland';
+import { fetchConstructionTypes, fetchItems, MapServerApiError, type ConstructionType, type CatalogItem } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let types: ConstructionType[] = [];
+let items: CatalogItem[] = [];
+let loadError: string | null = null;
+try {
+  [types, items] = await Promise.all([fetchConstructionTypes(Astro), fetchItems(Astro)]);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el catálogo de construcciones.';
+}
+---
+<BaseLayout title="Construcciones">
+  <section class="view catalog-view" data-constructions-root>
+    <div data-constructions-list-page>
+      <div class="catalog-toolbar">
+        <h2><Fragment set:html={icon('building')} />Catálogo de construcciones</h2>
+        <button type="button" class="btn-primary" data-constructions-new-btn>+ Nueva construcción</button>
+      </div>
+      {loadError ? (
+        <p class="hint">❌ {loadError}</p>
+      ) : (
+        <div class="admin-table-wrap" data-constructions-table></div>
+      )}
+    </div>
+    <div class="form-panel" data-constructions-form-panel></div>
+  </section>
+</BaseLayout>
+
+<script type="application/json" id="constructions-bootstrap" is:inline set:html={jsonIsland({ types, items })} />
+<script>
+  import { initConstructionCatalog } from '../../../scripts/constructionCatalog';
+  import type { ConstructionType, CatalogItem } from '../../../lib/mapServerApi';
+
+  const root = document.querySelector<HTMLElement>('[data-constructions-root]');
+  const bootstrapEl = document.getElementById('constructions-bootstrap');
+  if (root && bootstrapEl) {
+    const bootstrap = JSON.parse(bootstrapEl.textContent ?? '{}') as { types: ConstructionType[]; items: CatalogItem[] };
+    initConstructionCatalog(root, bootstrap.types ?? [], bootstrap.items ?? []);
+  }
+</script>

@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+---
+<BaseLayout title="Mecánicas">
+  <div class="catalog-view">
+    <div class="catalog-toolbar"><h2><Fragment set:html={icon('settings')} />Mecánicas</h2></div>
+    <div data-mechanics-root></div>
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initMechanics } from '../../../scripts/mechanics';
+  import { initLiveUpdates } from '../../../scripts/liveUpdates';
+  const root = document.querySelector<HTMLElement>('[data-mechanics-root]');
+  if (root) {
+    initMechanics(root);
+    initLiveUpdates('mechanics', () => initMechanics(root));
+  }
+</script>

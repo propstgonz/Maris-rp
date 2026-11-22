@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { fetchModmailCategories, MapServerApiError } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let categories: Awaited<ReturnType<typeof fetchModmailCategories>> = [];
+let loadError: string | null = null;
+try {
+  categories = await fetchModmailCategories(Astro);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la lista de categorías.';
+}
+---
+<BaseLayout title="Categorías de modmail">
+  <div class="catalog-view" data-modmail-categories-root>
+    <div class="catalog-toolbar">
+      <h2><Fragment set:html={icon('folder')} />Categorías de modmail</h2>
+    </div>
+    <p class="hint">
+      Discord limita a 50 canales por categoría, y cada personaje tiene su propio canal privado — los canales nuevos
+      se reparten automáticamente en la primera categoría con hueco, por orden de creación. Cuando la última se llene,
+      registra una más aquí abajo.
+    </p>
+
+    <form class="detail-card" data-create-category-form>
+      <h4><Fragment set:html={icon('plus', { size: 16 })} /> Registrar categoría nueva</h4>
+      <p class="hint">Se crea de verdad en Discord, clonando los permisos (Staff, roles especiales…) de la última categoría registrada.</p>
+      <input type="text" name="name" placeholder="Nombre de la categoría en Discord" required maxlength="100" />
+      <button type="submit" class="btn-primary"><Fragment set:html={icon('folder', { size: 15 })} /> Crear</button>
+      <p class="hint" data-create-category-status></p>
+    </form>
+
+    {loadError ? (
+      <p class="hint">❌ {loadError}</p>
+    ) : categories.length === 0 ? (
+      <p class="hint">Todavía no hay ninguna categoría registrada.</p>
+    ) : (
+      <div class="admin-table-wrap">
+        <div class="admin-table-scroll">
+          <table class="admin-table">
+            <thead><tr><th>Categoría</th><th>Canales</th><th>Registrada</th></tr></thead>
+            <tbody>
+              {categories.map(c => (
+                <tr>
+                  <td>{c.exists ? `#${c.displayName}` : <><s>{c.displayName}</s> <span class="hint">(ya no existe en Discord)</span></>}</td>
+                  <td>{c.channelCount}/{c.maxChannels}{c.channelCount >= c.maxChannels ? ' 🔴 LLENA' : ''}</td>
+                  <td>{new Date(c.createdAt).toLocaleString('es-ES')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initModmailCategories } from '../../../scripts/modmailCategories';
+  const root = document.querySelector<HTMLElement>('[data-modmail-categories-root]');
+  if (root) initModmailCategories(root);
+</script>

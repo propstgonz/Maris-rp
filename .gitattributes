@@ -1,0 +1,18 @@
+# LF estricto en TODO el árbol de trabajo, también en Windows.
+#
+# No es cosmético: mysql-init/create-app-user.sh se bind-montea dentro de un
+# contenedor Linux, y con CRLF el entrypoint de mysql:8 muere con
+# "/bin/bash^M: bad interpreter" — el usuario de la app no se crea y el bot
+# se queda sin poder conectar. El índice de git ya estaba en LF; lo que metía
+# los CRLF era core.autocrlf=true al hacer checkout. Este fichero tiene
+# prioridad sobre esa opción, así que la máquina de quien clone da igual.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.gz   binary
+*.db   binary

@@ -1,0 +1,38 @@
+{
+  "name": "roleplay-bot",
+  "version": "1.0.0",
+  "description": "Bot de Discord para servidor de Roleplay Político-Económico",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "npm run test:unit && npm run test:commands && npm run test:gui && npm run test:worldmap && npm run test:smoke",
+    "test:unit": "node --experimental-test-module-mocks --test \"test/*.test.mjs\"",
+    "test:smoke": "node scripts/ci-smoke-test.mjs",
+    "deploy-commands": "node scripts/deploy-commands.js",
+    "map-server": "node src/mapServer.js",
+    "import-map": "node scripts/import-map-from-image.js",
+    "test:commands": "node scripts/verify-command-defs.mjs",
+    "test:gui": "node scripts/verify-gui-flows.mjs",
+    "test:worldmap": "node scripts/verify-world-map.mjs"
+  },
+  "dependencies": {
+    "compression": "^1.7.4",
+    "csrf-sync": "^4.2.1",
+    "discord.js": "^14.15.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.6.2",
+    "express-session": "^1.18.0",
+    "helmet": "^8.3.0",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.24.2",
+    "node-cron": "^3.0.3",
+    "pngjs": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=22.3.0"
+  }
+}

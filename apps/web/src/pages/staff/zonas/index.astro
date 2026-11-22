@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { jsonIsland } from '../../../lib/jsonIsland';
+import { fetchZones, fetchItems, MapServerApiError, type Zone, type CatalogItem } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let zones: Zone[] = [];
+let items: CatalogItem[] = [];
+let loadError: string | null = null;
+try {
+  [zones, items] = await Promise.all([fetchZones(Astro), fetchItems(Astro)]);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el catálogo de zonas.';
+}
+---
+<BaseLayout title="Zonas">
+  <section class="view catalog-view" data-zones-root>
+    <div data-zones-list-page>
+      <div class="catalog-toolbar">
+        <h2><Fragment set:html={icon('zone')} />Catálogo de zonas</h2>
+        <button type="button" class="btn-primary" data-zones-new-btn>+ Nueva zona</button>
+      </div>
+      {loadError ? (
+        <p class="hint">❌ {loadError}</p>
+      ) : (
+        <div class="admin-table-wrap" data-zones-table></div>
+      )}
+    </div>
+    <div class="form-panel" data-zones-form-panel></div>
+  </section>
+</BaseLayout>
+
+<script type="application/json" id="zones-bootstrap" is:inline set:html={jsonIsland({ zones, items })} />
+<script>
+  import { initZoneCatalog } from '../../../scripts/zoneCatalog';
+  import type { Zone, CatalogItem } from '../../../lib/mapServerApi';
+
+  const root = document.querySelector<HTMLElement>('[data-zones-root]');
+  const bootstrapEl = document.getElementById('zones-bootstrap');
+  if (root && bootstrapEl) {
+    const bootstrap = JSON.parse(bootstrapEl.textContent ?? '{}') as { zones: Zone[]; items: CatalogItem[] };
+    initZoneCatalog(root, bootstrap.zones ?? [], bootstrap.items ?? []);
+  }
+</script>

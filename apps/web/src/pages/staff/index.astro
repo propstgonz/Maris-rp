@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { icon } from '../../lib/icons';
+import { requireRolepriest } from '../../lib/auth';
+import { fetchItems, fetchTerrainTypes, fetchConstructionTypes, fetchNpcTypes, fetchEffectTypes, fetchWorldIntegrity, MapServerApiError, type IntegrityReport } from '../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+const user = guard;
+
+const ENTITY_PATH: Record<string, string> = {
+  item: '/staff/items',
+  construction_type: '/staff/construction-types',
+  npc_type: '/staff/npc-types',
+  terrain_type: '/staff/terrain-types',
+  recipe: '/staff/items',
+  tile: '/staff/mapa',
+};
+
+let cards: { icon: string; label: string; count: number | null; path: string }[] = [];
+let loadError: string | null = null;
+let health: IntegrityReport | null = null;
+
+if (user) {
+  try {
+    const [items, terrains, constructions, npcs, effects, integrity] = await Promise.all([
+      fetchItems(Astro), fetchTerrainTypes(Astro), fetchConstructionTypes(Astro), fetchNpcTypes(Astro), fetchEffectTypes(Astro), fetchWorldIntegrity(Astro),
+    ]);
+    health = integrity;
+    cards = [
+      { icon: 'map', label: 'Mapa', count: null, path: '/staff/mapa' },
+      { icon: 'crosshair', label: 'Ver el juego', count: null, path: '/' },
+      { icon: 'package', label: 'Ítems', count: items.length, path: '/staff/items' },
+      { icon: 'globe', label: 'Terrenos', count: terrains.length, path: '/staff/terrain-types' },
+      { icon: 'building', label: 'Construcciones', count: constructions.length, path: '/staff/construction-types' },
+      { icon: 'skull', label: 'NPCs', count: npcs.length, path: '/staff/npc-types' },
+      { icon: 'sparkles', label: 'Estados', count: effects.length, path: '/staff/effect-types' },
+      { icon: 'flag', label: 'Facciones', count: null, path: '/staff/facciones' },
+      { icon: 'users', label: 'Jugadores', count: null, path: '/staff/players' },
+      { icon: 'scroll', label: 'Registro', count: null, path: '/staff/audit-log' },
+      { icon: 'settings', label: 'Mecánicas', count: null, path: '/staff/mechanics' },
+      { icon: 'terminal', label: 'Terminal', count: null, path: '/staff/terminal' },
+      { icon: 'save', label: 'Backups', count: null, path: '/staff/backups' },
+      { icon: 'folder', label: 'Categorías', count: null, path: '/staff/modmail-categorias' },
+      { icon: 'book', label: 'Guía de Staff', count: null, path: '/staff/docs' },
+    ];
+  } catch (err) {
+    loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el resumen del panel.';
+  }
+}
+---
+<BaseLayout title="Inicio">
+  <div class="catalog-view">
+    <div class="catalog-toolbar">
+      <h2><Fragment set:html={icon('home')} />Inicio</h2>
+    </div>
+    {loadError ? (
+      <p class="hint">❌ {loadError}</p>
+    ) : (
+      <Fragment>
+        {health && health.findings.length > 0 && (
+          <div class="world-health">
+            <h3><Fragment set:html={icon('alert-triangle', { size: 18 })} />Salud del mundo</h3>
+            <ul class="world-health-list">
+              {health.findings.map(f => (
+                <li class={`world-health-item world-health-${f.severity}`}>
+                  <span class="world-health-icon" set:html={icon(f.severity === 'error' ? 'alert-circle' : f.severity === 'warning' ? 'alert-triangle' : 'info', { size: 16 })} />
+                  <span class="world-health-message">
+                    {f.message}
+                    {ENTITY_PATH[f.entity] && <a href={ENTITY_PATH[f.entity]}>Ver</a>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div class="dashboard-grid">
+          {cards.map(c => (
+            <a href={c.path} class="dashboard-card">
+              <span class="dashboard-icon" set:html={icon(c.icon, { size: 22 })} />
+              <span class="dashboard-label">{c.label}</span>
+              {c.count != null && <span class="dashboard-count">{c.count}</span>}
+            </a>
+          ))}
+        </div>
+      </Fragment>
+    )}
+  </div>
+</BaseLayout>

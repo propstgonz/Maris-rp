@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+---
+<BaseLayout title="Jugadores">
+  <div class="catalog-view" data-players-root>
+    <div class="catalog-toolbar">
+      <h2><Fragment set:html={icon('users')} />Jugadores</h2>
+      <button type="button" class="btn-secondary" title="Actualiza permisos y nombre de los canales privados de personaje ya existentes" data-sync-channels-btn>
+        <Fragment set:html={icon('refresh', { size: 15 })} />Sincronizar canales
+      </button>
+    </div>
+    <div class="player-search"><input type="text" placeholder="Buscar por usuario, personaje o Discord ID… (vacío = listar existentes)" data-player-search-input /></div>
+    <div class="admin-table-wrap" data-player-search-results></div>
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initPlayerSearch } from '../../../scripts/playerSearch';
+  const root = document.querySelector<HTMLElement>('[data-players-root]');
+  if (root) initPlayerSearch(root);
+</script>

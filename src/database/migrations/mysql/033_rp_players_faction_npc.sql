@@ -1,0 +1,2 @@
+ALTER TABLE factions
+  ADD COLUMN is_npc TINYINT(1) NOT NULL DEFAULT 0 CHECK(is_npc IN (0, 1));

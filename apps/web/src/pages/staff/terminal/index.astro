@@ -1,0 +1,50 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+---
+<BaseLayout title="Terminal">
+  <div class="catalog-view">
+    <div class="catalog-toolbar"><h2><Fragment set:html={icon('terminal')} />Terminal</h2></div>
+    <div class="terminal-grid" data-terminal-root>
+      <div class="terminal-console">
+        <h3>Comandos de Staff</h3>
+        <p class="hint">Igual que en Discord, con las opciones en <code>clave:valor</code> — ej. <code>effect add jugador:123456789012345678 efecto:herido duracion_horas:24</code>. Ver la <a href="/staff/docs">guía de Staff</a> para más detalle.</p>
+        <form data-terminal-command-form>
+          <input type="text" placeholder="efecto add jugador:... efecto:... duracion_horas:24" autocomplete="off" data-terminal-command-input>
+          <button type="submit" class="btn-primary">Ejecutar</button>
+        </form>
+        <pre class="terminal-output" data-terminal-command-output></pre>
+      </div>
+      <div class="terminal-console">
+        <h3>SQL (solo lectura)</h3>
+        <p class="hint">Solo <code>SELECT</code>, una sola sentencia, máximo 500 filas.</p>
+        <form data-terminal-sql-form>
+          <textarea rows="3" placeholder="SELECT username, hp FROM players WHERE is_alive = 1 ORDER BY hp ASC LIMIT 20" data-terminal-sql-input></textarea>
+          <button type="submit" class="btn-primary">Ejecutar</button>
+        </form>
+        <div class="terminal-output" data-terminal-sql-output></div>
+      </div>
+      <div class="terminal-console">
+        <h3><Fragment set:html={icon('megaphone', { size: 16 })} /> Broadcast</h3>
+        <p class="hint">MD a todos los jugadores registrados, con hasta 4 imágenes adjuntas opcionales — igual que <code>/broadcast</code> en Discord.</p>
+        <form data-broadcast-form>
+          <textarea rows="3" placeholder="Mensaje para todos los jugadores…" maxlength="1500" required data-broadcast-message></textarea>
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple data-broadcast-images />
+          <button type="submit" class="btn-primary">Enviar</button>
+        </form>
+        <pre class="terminal-output" data-broadcast-output></pre>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initTerminal } from '../../../scripts/terminal';
+  const root = document.querySelector<HTMLElement>('[data-terminal-root]');
+  if (root) initTerminal(root);
+</script>

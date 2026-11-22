@@ -1,0 +1,43 @@
+{
+  "_instrucciones": "Sustituye los IDs de ejemplo (000...001) por los reales de tu servidor Discord. Activa el modo developer en Discord (Ajustes > Avanzado) para poder copiar IDs.",
+  "roles": {
+    "_nota": "IDs de los roles de Discord que tienen cada nivel de acceso",
+    "staff": [
+      "1538794336760766495"
+    ],
+    "mapPriest": [
+      "1538794336760766495"
+    ],
+    "player": [
+      "1283903420646035558"
+    ],
+    "characterCreated": "1508103686537216061"
+  },
+  "channels": {
+    "_nota": "IDs de los canales de texto donde el bot envía mensajes automáticos",
+    "logs": "1506344027128336447",
+    "announcements": "1506344027128336447",
+    "transactions": "1506488447681036338"
+  },
+  "game": {
+    "maxHp": 10,
+    "maxHunger": 10,
+    "startingLaburo": 10,
+    "starvationHpLossPerDay": 4,
+    "wellFedHpRegenPerDay": 4,
+    "dailyResetCron": "0 0 * * *",
+    "meleeDamage": 1,
+    "meleeSelfDamage": 1,
+    "surrenderSurvivalPercent": 75,
+    "surrenderLootMinItems": 1,
+    "surrenderLootMaxItems": 3,
+    "breedingCooldownHours": 24
+  },
+  "images": {
+    "defaultAvatar": "avatars/default.png",
+    "avatarsHostPath": "/app/avatars",
+    "itemsHostPath": "/app/items",
+    "constructionsHostPath": "/app/constructions",
+    "npcsHostPath": "/app/npcs"
+  }
+}

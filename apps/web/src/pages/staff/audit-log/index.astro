@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { fetchAuditLogActions, MapServerApiError } from '../../../lib/mapServerApi';
+import { FAMILY_LABEL, actionFamily, actionIcon, actionPhrase } from '../../../lib/auditActions';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let actions: string[] = [];
+let loadError: string | null = null;
+try {
+  actions = await fetchAuditLogActions(Astro);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el registro de auditoría.';
+}
+
+const families = [...new Set(actions.map(actionFamily))]
+  .filter(Boolean)
+  .sort((a, b) => (FAMILY_LABEL[a] ?? a).localeCompare(FAMILY_LABEL[b] ?? b, 'es'));
+---
+<BaseLayout title="Registro">
+  <div class="catalog-view" data-log-root>
+    <div class="catalog-toolbar">
+      <h2><Fragment set:html={icon('scroll')} />Registro de acciones</h2>
+      <button type="button" class="btn-secondary" data-log-view-toggle></button>
+    </div>
+    {loadError ? (
+      <p class="hint">❌ {loadError}</p>
+    ) : (
+      <>
+        <div class="log-filters">
+          <input type="search" placeholder="Buscar por usuario o por sobre qué…" data-log-filter-q />
+          <select data-log-filter-prefix title="Filtrar por categoría de acción">
+            <option value="">Todas las categorías</option>
+            {families.map(f => <option value={f}>{FAMILY_LABEL[f] ?? f}</option>)}
+          </select>
+          <select data-log-filter-action title="Filtrar por una acción concreta">
+            <option value="">Todas las acciones</option>
+            {actions.map(a => <option value={a}>{`${actionIcon(a)} ${actionPhrase(a)}`}</option>)}
+          </select>
+          <select data-log-filter-source title="Filtrar por dónde se hizo">
+            <option value="">Web y Discord</option>
+            <option value="web">🌐 Solo web</option>
+            <option value="discord">💬 Solo Discord</option>
+          </select>
+          <input type="date" data-log-filter-from title="Desde esta fecha (incluida)" />
+          <input type="date" data-log-filter-to title="Hasta esta fecha (incluida)" />
+          <button type="button" class="btn-secondary" data-log-filter-reset>Limpiar</button>
+        </div>
+        <div data-log-table></div>
+      </>
+    )}
+  </div>
+</BaseLayout>
+
+<script>
+
+  import { initAuditLog } from '../../../scripts/auditLog';
+  const root = document.querySelector<HTMLElement>('[data-log-root]');
+  if (root) initAuditLog(root);
+</script>

@@ -1,0 +1,190 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { jsonIsland } from '../../../lib/jsonIsland';
+import { fetchTerrainTypes, fetchFactions, fetchZones, fetchEffectTypes, fetchNpcTypes, fetchNpcGroupTypes, fetchMechanicsSettings, MapServerApiError } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let bootstrap = { terrainTypes: [] as unknown[], factions: [] as unknown[], zones: [] as unknown[], effectTypes: [] as unknown[], npcTypes: [] as unknown[], npcGroupTypes: [] as unknown[], mapMaxCoordinate: 0 };
+let loadError: string | null = null;
+try {
+  const [terrainTypes, factions, zones, effectTypes, npcTypes, npcGroupTypes, mechanics] = await Promise.all([
+    fetchTerrainTypes(Astro), fetchFactions(Astro), fetchZones(Astro), fetchEffectTypes(Astro), fetchNpcTypes(Astro), fetchNpcGroupTypes(Astro), fetchMechanicsSettings(Astro),
+  ]);
+  bootstrap = { terrainTypes, factions, zones, effectTypes, npcTypes, npcGroupTypes, mapMaxCoordinate: mechanics.mapMaxCoordinate };
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el mapa.';
+}
+---
+<BaseLayout title="Mapa">
+  <Fragment slot="mapControls">
+    <div class="map-controls">
+      <div class="zoom-controls">
+        <button id="zoomOut" title="Alejar" set:html={icon('zoom-out', { size: 16 })} />
+        <span id="zoomLabel" class="zoom-label">100%</span>
+        <button id="zoomIn" title="Acercar" set:html={icon('zoom-in', { size: 16 })} />
+        <button id="zoomCenter" title="Volver a encuadrar el mapa entero" set:html={icon('crosshair', { size: 16 })} />
+      </div>
+      <div class="region-goto">
+        <input id="gotoX" type="number" min="0" max={bootstrap.mapMaxCoordinate} placeholder="X" />
+        <input id="gotoY" type="number" min="0" max={bootstrap.mapMaxCoordinate} placeholder="Y" />
+        <button id="gotoBtn" type="button">Ir</button>
+      </div>
+      <div class="marquee-mode-toggle">
+        <button id="marqueeModeTerrain" type="button" class="marquee-mode-btn active" title="Shift+arrastrar selecciona un rectángulo de terreno">
+          <Fragment set:html={icon('brush', { size: 14 })} />Terreno
+        </button>
+        <button id="marqueeModeFaccion" type="button" class="marquee-mode-btn" title="Shift+arrastrar asigna territorio de facción">
+          <Fragment set:html={icon('flag', { size: 14 })} />Facción
+        </button>
+        <button id="marqueeModeZona" type="button" class="marquee-mode-btn" title="Shift+arrastrar asigna zona a un rectángulo de casillas">
+          <Fragment set:html={icon('zone', { size: 14 })} />Zona
+        </button>
+      </div>
+      <div class="marquee-mode-toggle">
+        <button id="zoneOverlayToggle" type="button" class="marquee-mode-btn" title="Muestra u oculta el contorno de color de las zonas">
+          <Fragment set:html={icon('eye', { size: 14 })} />Zonas
+        </button>
+      </div>
+      <div class="marquee-mode-toggle">
+        <button id="brushToggle" type="button" class="marquee-mode-btn" title="Arrastra sin Shift para repintar el terreno de las casillas que ya existen">
+          <Fragment set:html={icon('pencil', { size: 14 })} />Pincel
+        </button>
+      </div>
+    </div>
+  </Fragment>
+
+  <section id="view-map" data-map-root>
+    {loadError ? (
+      <p class="hint">❌ {loadError}</p>
+    ) : (
+      <>
+        <div class="canvas-wrap">
+          <canvas id="mapCanvas"></canvas>
+          <div id="coordHint" class="coord-hint"></div>
+        </div>
+
+        <aside class="sidebar">
+          <section id="legend" class="panel">
+            <h3>Leyenda</h3>
+            <div id="legendList" class="legend-list"></div>
+            <details class="legend-help">
+              <summary>Controles y atajos</summary>
+              <p class="hint">Arrastra: mover el mapa · Rueda: zoom · Clic: seleccionar/ver casilla · Shift+clic: añadir una casilla a la selección · Shift+arrastrar: seleccionar un rectángulo entero (para repintar, crear terreno, o asignar facción o zona de golpe) · Pincel (arriba): arrastra sin Shift para repintar casillas sueltas al vuelo · Letras: 📦 ítems, 🏗️ construcciones, 👤 jugadores, ⚙️ generadores de recursos</p>
+            </details>
+          </section>
+
+          <section id="brushPanel" class="panel hidden">
+            <h3><Fragment set:html={icon('pencil', { size: 16 })} />Pincel de terreno</h3>
+            <p class="hint">Con el pincel activo (arriba), arrastra sobre el mapa para repintar el terreno de las casillas que ya existen — no crea casillas nuevas.</p>
+            <select id="brushTerrain"></select>
+          </section>
+
+          <section id="detailPanel" class="panel hidden">
+            <h3 id="detailHeading">Casilla</h3>
+            <div id="detailEmpty" class="hint">Ninguna casilla seleccionada — haz clic en el mapa.</div>
+
+            <form id="createTileForm" class="hidden">
+              <p class="hint">Esta casilla no existe todavía.</p>
+              <label>Coordenadas <input id="ctCoords" disabled /></label>
+              <label>Nombre <input id="ctName" maxlength="100" required /></label>
+              <label>Terreno <select id="ctTerrain" required></select></label>
+              <label>Recurso (requisito de construcción) <input id="ctResource" placeholder="(vacío = ninguno)" /></label>
+              <label>Descripción <textarea id="ctDescription" maxlength="200" rows="3"></textarea></label>
+              <button type="submit" class="btn-primary">+ Crear casilla</button>
+              <p id="ctStatus" class="hint"></p>
+            </form>
+
+            <form id="detailForm" class="hidden">
+              <label>Coordenadas <input id="fCoords" disabled /></label>
+              <label>Nombre <input id="fName" maxlength="100" /></label>
+              <label>Terreno <select id="fTerrain"></select></label>
+              <label>Zona <select id="fZona"></select></label>
+              <label>Recurso (requisito de construcción) <input id="fResource" placeholder="(vacío = ninguno)" /></label>
+              <p class="hint">Etiqueta libre — solo sirve como requisito de <code>requiere_recurso</code> al construir. No es la lista recolectable de <code>/recolectar</code>, esa se edita en <a href="/staff/terrain-types">Terrenos</a>.</p>
+              <label>Descripción <textarea id="fDescription" maxlength="200" rows="3"></textarea></label>
+              <div id="fReadonly" class="readonly-block"></div>
+              <button type="button" id="fViewDetail" class="btn-secondary">Ver detalle completo</button>
+              <button type="submit" id="fSave">Guardar</button>
+              <button type="button" id="fDelete" class="btn-primary btn-danger">Eliminar casilla</button>
+              <p id="fStatus" class="hint"></p>
+            </form>
+          </section>
+
+          <section id="bulkPanel" class="panel hidden">
+            <h3><span id="bulkCount">0</span> casillas seleccionadas</h3>
+            <form id="bulkForm">
+              <label>Nuevo terreno (opcional) <select id="bTerrain"><option value="">— no cambiar —</option></select></label>
+              <label>Nuevo recurso — requisito de construcción (opcional) <input id="bResource" placeholder="(dejar vacío = no cambiar)" /></label>
+              <button type="submit">Aplicar a la selección</button>
+              <button type="button" id="bulkClear">Limpiar selección</button>
+              <p id="bStatus" class="hint"></p>
+            </form>
+          </section>
+
+          <section id="rangeRepaintPanel" class="panel hidden">
+            <h3>Repintar terreno en este rectángulo</h3>
+            <p class="hint">Cambia el terreno de las casillas que YA existen dentro del rectángulo — a diferencia de "Crear/rellenar" de abajo, esto sí sobrescribe.</p>
+            <form id="rangeRepaintForm">
+              <label>Terreno <select id="rrTerrain" required></select></label>
+              <button type="submit">Repintar</button>
+              <p id="rrStatus" class="hint"></p>
+            </form>
+          </section>
+
+          <section id="rangeCreatePanel" class="panel hidden">
+            <h3>Crear terreno en este rectángulo</h3>
+            <p class="hint">Rellena huecos sin tocar las casillas que ya existan dentro del rectángulo.</p>
+            <form id="rangeCreateForm">
+              <label>Nombre <input id="rcName" maxlength="100" required /></label>
+              <label>Terreno <select id="rcTerrain" required></select></label>
+              <label>Descripción (opcional) <textarea id="rcDescription" maxlength="200" rows="2"></textarea></label>
+              <label>Recurso — requisito de construcción (opcional) <input id="rcResource" /></label>
+              <button type="submit">Crear/rellenar</button>
+              <p id="rcStatus" class="hint"></p>
+            </form>
+          </section>
+
+          <section id="zonaAssignPanel" class="panel hidden">
+            <h3>Asignar zona a este rectángulo</h3>
+            <p class="hint">La zona suma sus recursos a los del terreno y acota dónde aparecen los NPCs marcados como suyos. Una casilla solo puede estar en una zona.</p>
+            <form id="zonaAssignForm">
+              <label>Zona <select id="zaZona" required></select></label>
+              <button type="submit">Asignar</button>
+              <button type="button" id="zaUnassign" class="btn-secondary">Quitar zona de aquí</button>
+              <p id="zaStatus" class="hint"></p>
+            </form>
+          </section>
+
+          <section id="faccionAssignPanel" class="panel hidden">
+            <h3>Asignar facción a este rectángulo</h3>
+            <p class="hint">Exige un edificio <code>ayuntamiento</code> ya construido dentro del rectángulo.</p>
+            <form id="faccionAssignForm">
+              <label>Facción <select id="naFaccion" required></select></label>
+              <button type="submit">Asignar</button>
+              <button type="button" id="naUnassign" class="btn-secondary">Quitar facción de aquí</button>
+              <p id="naStatus" class="hint"></p>
+            </form>
+          </section>
+        </aside>
+
+        <div id="tile-detail-panel" class="form-panel"></div>
+      </>
+    )}
+  </section>
+</BaseLayout>
+
+<script type="application/json" id="map-bootstrap" is:inline set:html={jsonIsland(bootstrap)} />
+<script>
+  import { initMapCanvas, type MapBootstrap } from '../../../scripts/mapCanvas';
+
+  const root = document.querySelector<HTMLElement>('[data-map-root]');
+  const bootstrapEl = document.getElementById('map-bootstrap');
+  if (root && bootstrapEl) {
+    const bootstrap = JSON.parse(bootstrapEl.textContent ?? '{}') as MapBootstrap;
+    initMapCanvas(root, bootstrap);
+  }
+</script>

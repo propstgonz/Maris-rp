@@ -1,0 +1,29 @@
+---
+import GameLayout from '../../layouts/GameLayout.astro';
+import { icon } from '../../lib/icons';
+import { requireCharacter } from '../../lib/auth';
+import { fetchRoleplayDocs, MapServerApiError } from '../../lib/mapServerApi';
+import { renderMarkdown } from '../../scripts/docs';
+
+const guard = requireCharacter(Astro);
+if (guard instanceof Response) return guard;
+
+let html = '';
+let loadError: string | null = null;
+try {
+  const { content } = await fetchRoleplayDocs(Astro);
+  html = renderMarkdown(content);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la guía de roleo.';
+}
+---
+<GameLayout title="Guía de roleo">
+  <div class="catalog-view">
+    <div class="catalog-toolbar"><h2><Fragment set:html={icon('book')} />Guía de roleo</h2></div>
+    {loadError ? (
+      <p class="hint"><Fragment set:html={icon('alert-circle', { size: 14 })} /> {loadError}</p>
+    ) : (
+      <div class="docs-content" set:html={html} />
+    )}
+  </div>
+</GameLayout>

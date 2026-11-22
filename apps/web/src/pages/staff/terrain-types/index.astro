@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { icon } from '../../../lib/icons';
+import { requireRolepriest } from '../../../lib/auth';
+import { jsonIsland } from '../../../lib/jsonIsland';
+import { fetchTerrainTypes, fetchItems, MapServerApiError, type TerrainType, type CatalogItem } from '../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+let terrains: TerrainType[] = [];
+let items: CatalogItem[] = [];
+let loadError: string | null = null;
+try {
+  [terrains, items] = await Promise.all([fetchTerrainTypes(Astro), fetchItems(Astro)]);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el catálogo de terrenos.';
+}
+---
+<BaseLayout title="Terrenos">
+  <section class="view catalog-view" data-terrains-root>
+    <div data-terrains-list-page>
+      <div class="catalog-toolbar">
+        <h2><Fragment set:html={icon('globe')} />Catálogo de terrenos</h2>
+        <button type="button" class="btn-primary" data-terrains-new-btn>+ Nuevo terreno</button>
+      </div>
+      {loadError ? (
+        <p class="hint">❌ {loadError}</p>
+      ) : (
+        <div class="admin-table-wrap" data-terrains-table></div>
+      )}
+    </div>
+    <div class="form-panel" data-terrains-form-panel></div>
+  </section>
+</BaseLayout>
+
+<script type="application/json" id="terrains-bootstrap" is:inline set:html={jsonIsland({ terrains, items })} />
+<script>
+  import { initTerrainCatalog } from '../../../scripts/terrainCatalog';
+  import type { TerrainType, CatalogItem } from '../../../lib/mapServerApi';
+
+  const root = document.querySelector<HTMLElement>('[data-terrains-root]');
+  const bootstrapEl = document.getElementById('terrains-bootstrap');
+  if (root && bootstrapEl) {
+    const bootstrap = JSON.parse(bootstrapEl.textContent ?? '{}') as { terrains: TerrainType[]; items: CatalogItem[] };
+    initTerrainCatalog(root, bootstrap.terrains, bootstrap.items);
+  }
+</script>

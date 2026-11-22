@@ -1,0 +1,27 @@
+# Secretos — NUNCA en Git
+.env
+
+# Base de datos (SQLite legado, backups de MySQL, datos reales)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sql.gz
+
+# Dependencias de Node
+node_modules/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Editores
+.vscode/
+.idea/
+
+# apps/web (Astro, Fase 2 — ver docs/plan.md §2)
+dist/
+.astro/
+ssh_server.bat

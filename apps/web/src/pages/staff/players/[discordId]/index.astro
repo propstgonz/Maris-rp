@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import { requireRolepriest } from '../../../../lib/auth';
+import { jsonIsland } from '../../../../lib/jsonIsland';
+import { fetchItems, fetchEffectTypes, MapServerApiError, type CatalogItem, type EffectType } from '../../../../lib/mapServerApi';
+
+const guard = requireRolepriest(Astro);
+if (guard instanceof Response) return guard;
+
+const { discordId } = Astro.params;
+
+let items: CatalogItem[] = [];
+let effects: EffectType[] = [];
+let loadError: string | null = null;
+try {
+  [items, effects] = await Promise.all([fetchItems(Astro), fetchEffectTypes(Astro)]);
+} catch (err) {
+  loadError = err instanceof MapServerApiError ? err.message : 'No se pudieron cargar los catálogos.';
+}
+---
+<BaseLayout title="Jugador">
+  <div class="catalog-view" data-player-sheet-root data-discord-id={discordId}>
+    {loadError ? <p class="hint">❌ {loadError}</p> : <div class="loading-state"><span class="spinner"></span> Cargando…</div>}
+  </div>
+</BaseLayout>
+
+<script type="application/json" id="player-sheet-bootstrap" is:inline set:html={jsonIsland({ items, effects })} />
+<script>
+  import { initPlayerSheet } from '../../../../scripts/playerSheet';
+  import type { CatalogItem, EffectType } from '../../../../lib/mapServerApi';
+
+  const root = document.querySelector<HTMLElement>('[data-player-sheet-root]');
+  const bootstrapEl = document.getElementById('player-sheet-bootstrap');
+  if (root && bootstrapEl) {
+    const discordId = root.dataset.discordId!;
+    const bootstrap = JSON.parse(bootstrapEl.textContent ?? '{}') as { items: CatalogItem[]; effects: EffectType[] };
+    initPlayerSheet(root, discordId, bootstrap.items ?? [], bootstrap.effects ?? []);
+  }
+</script>
