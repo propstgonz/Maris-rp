@@ -48,13 +48,13 @@ services:
     networks:
       - ricardana-rp-bot-net
 
-  rp-map-editor:
+  rp-api:
     build:
       context: .
       dockerfile: Dockerfile
     image: rpdiscbot:latest
-    command: ["node", "src/mapServer.js"]
-    container_name: ricardana-rp-map
+    command: ["node", "src/apiServer.js"]
+    container_name: ricardana-rp-api
     restart: unless-stopped
     depends_on:
       - rpbot-bd
@@ -62,7 +62,7 @@ services:
     environment:
       DB_HOST: rpbot-bd
       DB_PORT: 3306
-      MAP_SERVER_PORT: 3000
+      API_PORT: 3000
     volumes:
       - /media/raid/database/rpbot:/app/data
       - ${HOST_PROJECT_DIR:-.}/config.json:/app/config.json:ro
@@ -84,11 +84,11 @@ services:
       # tiene ninguna interfaz), toda petición a /auth y /api se quedaba
       # colgada sin llegar a ningún sitio, sin dar ni siquiera un error.
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.roleplay-map.rule=Host(`rp-map.baronette.es`) && (PathPrefix(`/auth`) || PathPrefix(`/api`) || PathPrefix(`/static`))"
-      - "traefik.http.routers.roleplay-map.entrypoints=websecure"
-      - "traefik.http.routers.roleplay-map.tls=true"
-      - "traefik.http.routers.roleplay-map.priority=100"
-      - "traefik.http.services.roleplay-map.loadbalancer.server.port=3000"
+      - "traefik.http.routers.roleplay-api.rule=Host(`rp-map.baronette.es`) && (PathPrefix(`/auth`) || PathPrefix(`/api`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.roleplay-api.entrypoints=websecure"
+      - "traefik.http.routers.roleplay-api.tls=true"
+      - "traefik.http.routers.roleplay-api.priority=100"
+      - "traefik.http.services.roleplay-api.loadbalancer.server.port=3000"
 
   rp-web:
     build:
@@ -98,9 +98,9 @@ services:
     container_name: ricardana-rp-web
     restart: unless-stopped
     depends_on:
-      - rp-map-editor
+      - rp-api
     environment:
-      MAP_SERVER_INTERNAL_URL: http://rp-map-editor:3000
+      API_INTERNAL_URL: http://rp-api:3000
       HOST: 0.0.0.0
       PORT: 4321
     networks:

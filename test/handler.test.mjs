@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { handler } from '../src/mapServer/utils/handler.js';
+import { handler } from '../src/api/utils/handler.js';
 import { UserFacingError } from '../src/utils/errors.js';
 
 function makeFakeRes() {

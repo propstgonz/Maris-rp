@@ -1,30 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { withPassive } from './api';
 import { showToast } from './ui';
 
@@ -62,14 +37,12 @@ export function connectEventSource<T>(url: string, onMessage: (data: T) => void)
   connect();
 }
 
-
 export function markRefreshed() {
   const label = document.getElementById('lastRefreshLabel');
-  if (label) label.textContent = `🔄 ${new Date().toLocaleTimeString('es-ES')}`;
+  if (label) label.textContent = `${new Date().toLocaleTimeString('es-ES')}`;
 }
 
 interface LiveEvent { section?: string | null; message?: string | null }
-
 
 export function initLiveUpdates(section: string, onRefresh: () => Promise<void> | void) {
   async function refresh() {

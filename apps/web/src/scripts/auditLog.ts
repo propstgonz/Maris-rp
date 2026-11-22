@@ -2,8 +2,8 @@ import { escapeHtml, escapeAttr } from './html';
 import { apiFetch } from './api';
 import { initLiveUpdates } from './liveUpdates';
 import { icon } from '../lib/icons';
-import { actionIcon, actionPhrase, summarizeDetails, relativeTime } from '../lib/auditActions';
-import type { AuditLogPage, AuditLogEntry } from '../lib/mapServerApi';
+import { actionPhrase, summarizeDetails, relativeTime } from '../lib/auditActions';
+import type { AuditLogPage, AuditLogEntry } from '../lib/apiClient';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -39,7 +39,7 @@ export function initAuditLog(root: HTMLElement) {
 
   function entryHtml(row: AuditLogEntry): string {
     const when = parseUtc(row.created_at);
-    const sourceLabel = row.source === 'web' ? '🌐 Web' : '💬 Discord';
+    const sourceLabel = row.source === 'web' ? 'Web' : 'Discord';
     const summary = summarizeDetails(row.details);
 
     const target = row.target
@@ -49,7 +49,6 @@ export function initAuditLog(root: HTMLElement) {
       : '';
 
     return `<li class="log-entry">
-      <span class="log-entry-icon" aria-hidden="true">${actionIcon(row.action)}</span>
       <div class="log-entry-body">
         <p class="log-entry-title"><img class="player-avatar log-entry-avatar" src="/api/discord-avatar/${encodeURIComponent(row.actor_discord_id)}" alt="" loading="lazy"><b>${escapeHtml(row.actor_username)}</b> ${escapeHtml(actionPhrase(row.action))} ${target}</p>
         <p class="log-entry-meta">
@@ -66,7 +65,7 @@ export function initAuditLog(root: HTMLElement) {
     const when = parseUtc(row.created_at).toLocaleString('es-ES');
     const details = row.details == null ? '—' : JSON.stringify(row.details);
     return `<tr>
-      <td title="${row.source === 'web' ? 'Desde la web' : 'Desde Discord'}">${row.source === 'web' ? '🌐' : '💬'}</td>
+      <td title="${row.source === 'web' ? 'Desde la web' : 'Desde Discord'}">${row.source === 'web' ? 'Web' : 'Discord'}</td>
       <td>${escapeHtml(when)}</td>
       <td>${escapeHtml(row.actor_username)}</td>
       <td><code>${escapeHtml(row.action)}</code></td>
@@ -89,7 +88,7 @@ export function initAuditLog(root: HTMLElement) {
     try {
       data = await apiFetch<AuditLogPage>(`/api/audit-log?${currentParams()}`);
     } catch (err) {
-      tableContainer.innerHTML = `<p class="hint">❌ ${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
+      tableContainer.innerHTML = `<p class="hint">${escapeHtml(err instanceof Error ? err.message : 'Error desconocido.')}</p>`;
       return;
     }
 

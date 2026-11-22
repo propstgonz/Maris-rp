@@ -8,7 +8,7 @@ mock.module('../src/services/settingsService.js', {
   },
 });
 
-const { isSessionActive } = await import('../src/mapServer/middleware/auth.js');
+const { isSessionActive } = await import('../src/api/middleware/auth.js');
 
 function fakeReq(session) {
   let destroyed = false;

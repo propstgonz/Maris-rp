@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
-import { fetchStaffDocs, MapServerApiError } from '../../../lib/mapServerApi';
+import { fetchStaffDocs, ApiError } from '../../../lib/apiClient';
 import { renderMarkdown } from '../../../scripts/docs';
 
 const guard = requireRolepriest(Astro);
@@ -14,14 +14,14 @@ try {
   const { content } = await fetchStaffDocs(Astro);
   html = renderMarkdown(content);
 } catch (err) {
-  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar la guía de Staff.';
+  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar la guía de Staff.';
 }
 ---
 <BaseLayout title="Guía de Staff">
   <div class="catalog-view">
     <div class="catalog-toolbar"><h2><Fragment set:html={icon('book')} />Guía de Staff</h2></div>
     {loadError ? (
-      <p class="hint">❌ {loadError}</p>
+      <p class="hint">{loadError}</p>
     ) : (
       <div class="docs-content" data-docs-root set:html={html} />
     )}

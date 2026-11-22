@@ -2,8 +2,8 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
-import { fetchAuditLogActions, MapServerApiError } from '../../../lib/mapServerApi';
-import { FAMILY_LABEL, actionFamily, actionIcon, actionPhrase } from '../../../lib/auditActions';
+import { fetchAuditLogActions, ApiError } from '../../../lib/apiClient';
+import { FAMILY_LABEL, actionFamily, actionPhrase } from '../../../lib/auditActions';
 
 const guard = requireRolepriest(Astro);
 if (guard instanceof Response) return guard;
@@ -13,7 +13,7 @@ let loadError: string | null = null;
 try {
   actions = await fetchAuditLogActions(Astro);
 } catch (err) {
-  loadError = err instanceof MapServerApiError ? err.message : 'No se pudo cargar el registro de auditoría.';
+  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar el registro de auditoría.';
 }
 
 const families = [...new Set(actions.map(actionFamily))]
@@ -27,7 +27,7 @@ const families = [...new Set(actions.map(actionFamily))]
       <button type="button" class="btn-secondary" data-log-view-toggle></button>
     </div>
     {loadError ? (
-      <p class="hint">❌ {loadError}</p>
+      <p class="hint">{loadError}</p>
     ) : (
       <>
         <div class="log-filters">
@@ -38,12 +38,12 @@ const families = [...new Set(actions.map(actionFamily))]
           </select>
           <select data-log-filter-action title="Filtrar por una acción concreta">
             <option value="">Todas las acciones</option>
-            {actions.map(a => <option value={a}>{`${actionIcon(a)} ${actionPhrase(a)}`}</option>)}
+            {actions.map(a => <option value={a}>{actionPhrase(a)}</option>)}
           </select>
           <select data-log-filter-source title="Filtrar por dónde se hizo">
             <option value="">Web y Discord</option>
-            <option value="web">🌐 Solo web</option>
-            <option value="discord">💬 Solo Discord</option>
+            <option value="web">Solo web</option>
+            <option value="discord">Solo Discord</option>
           </select>
           <input type="date" data-log-filter-from title="Desde esta fecha (incluida)" />
           <input type="date" data-log-filter-to title="Hasta esta fecha (incluida)" />
