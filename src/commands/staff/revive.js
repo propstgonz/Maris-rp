@@ -1,11 +1,9 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { revivePlayer } from '../../services/playerService.js';
-import { reviveByCharacterId } from '../../services/characterLifecycleService.js';
+import { reviveCharacter, reviveByCharacterId } from '../../services/characterLifecycleService.js';
 import { requireRolepriest } from '../../utils/permissions.js';
 import { COLORS }       from '../../utils/embeds.js';
 import { getAvatarUrl } from '../../utils/playerAvatar.js';
 import logger             from '../../utils/logger.js';
-import { logAction }     from '../../services/auditLogService.js';
 
 function buildRevivedEmbed(revived, staffTag, note = null) {
   const embed = new EmbedBuilder()
@@ -48,19 +46,19 @@ export default {
     if (!await requireRolepriest(interaction)) return;
 
     const sub = interaction.options.getSubcommand();
+    const actor = { discordId: interaction.user.id, username: interaction.user.tag, source: 'discord' };
 
     if (sub === 'jugador') {
       const targetUser = interaction.options.getUser('jugador', true);
 
       let revived;
       try {
-        revived = await revivePlayer(targetUser.id);
+        revived = await reviveCharacter(targetUser.id, actor);
       } catch (err) {
         return interaction.reply({ content: `❌ ${err.message}`, flags: MessageFlags.Ephemeral });
       }
 
       logger.info(`[/revive jugador] ${interaction.user.tag} → ${targetUser.tag} revivido`);
-      logAction({ source: 'discord', actorDiscordId: interaction.user.id, actorUsername: interaction.user.tag, action: 'player.revive', target: targetUser.id, details: {} });
 
       return interaction.reply({ embeds: [buildRevivedEmbed(revived, interaction.user.tag)] });
     }
@@ -69,13 +67,12 @@ export default {
 
     let revived;
     try {
-      revived = await reviveByCharacterId(personajeId);
+      revived = await reviveByCharacterId(personajeId, actor);
     } catch (err) {
       return interaction.reply({ content: `❌ ${err.message}`, flags: MessageFlags.Ephemeral });
     }
 
     logger.info(`[/revive personaje_id] ${interaction.user.tag} → ID ${personajeId} (${revived.character_name}) revivido`);
-    logAction({ source: 'discord', actorDiscordId: interaction.user.id, actorUsername: interaction.user.tag, action: 'player.revive', target: revived.discord_id, details: { byCharacterId: personajeId } });
 
     return interaction.reply({
       embeds: [buildRevivedEmbed(revived, interaction.user.tag, 'Revivido dentro de la ventana de gracia de 7 días.')],
