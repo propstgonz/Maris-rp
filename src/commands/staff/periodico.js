@@ -2,7 +2,10 @@
 
 import { SlashCommandBuilder, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { getSetting, setSetting } from '../../services/settingsService.js';
-import { requireRolepriest } from '../../utils/permissions.js';
+import { requireRolepriest, resolveGuild } from '../../utils/permissions.js';
+import { requireTargetCharacter } from '../../utils/interactionContext.js';
+import { createPrintingPressChannel } from '../../services/newspaperService.js';
+import { UserFacingError } from '../../utils/errors.js';
 import { COLORS }       from '../../utils/embeds.js';
 import logger             from '../../utils/logger.js';
 import { logAction }      from '../../services/auditLogService.js';
@@ -10,7 +13,7 @@ import { logAction }      from '../../services/auditLogService.js';
 export default {
   data: new SlashCommandBuilder()
     .setName('periodico')
-    .setDescription('[Staff] Gestiona la categoría de canales-periódico (Imprenta)')
+    .setDescription('[Staff] Gestiona los canales-periódico (Imprenta)')
 
     .addSubcommand(sub =>
       sub
@@ -23,7 +26,16 @@ export default {
             .addChannelTypes(ChannelType.GuildCategory)
             .setRequired(true)
         )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('abrir')
+        .setDescription('Abre la imprenta de un jugador creándole su canal-periódico')
+        .addUserOption(opt => opt.setName('jugador').setDescription('Jugador dueño del periódico').setRequired(true))
+        .addStringOption(opt => opt.setName('nombre').setDescription('Nombre del canal').setRequired(true).setMaxLength(80))
     ),
+
+  permission: 'rolepriest',
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;
@@ -47,6 +59,27 @@ export default {
             .setFooter({ text: `Cambiado por ${interaction.user.tag}` })
             .setTimestamp(),
         ],
+      });
+    }
+
+    if (sub === 'abrir') {
+      const player = await requireTargetCharacter(interaction);
+      const guild = resolveGuild(interaction);
+      if (!guild) throw new UserFacingError('No se encontró el servidor donde crear el canal.');
+
+      let channel;
+      try {
+        channel = await createPrintingPressChannel(guild, player, interaction.options.getString('nombre', true).trim());
+      } catch (err) {
+        throw err instanceof UserFacingError ? err : new UserFacingError(err.message);
+      }
+
+      logger.info(`[/periodico abrir] ${interaction.user.tag} abrió el periódico #${channel.name} (${channel.id}) de ${player.discord_id}`);
+      await logAction({ source: 'discord', actorDiscordId: interaction.user.id, actorUsername: interaction.user.tag, action: 'staff.printing_press_channel', target: channel.id, details: { playerDiscordId: player.discord_id, channelName: channel.name } });
+
+      return interaction.reply({
+        embeds: [new EmbedBuilder().setColor(COLORS.GREEN).setTitle('🗞️ Periódico abierto').setDescription(`<#${channel.id}> es ahora el periódico de <@${player.discord_id}>.`)],
+        flags: MessageFlags.Ephemeral,
       });
     }
 
