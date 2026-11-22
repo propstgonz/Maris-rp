@@ -8,7 +8,6 @@ export const PROPERTY_TYPES = [
   { name: 'habitatge', displayName: 'Habitatge', category: 'vivienda', description: `Coste: 2 de Madera y 2 de Ladrillo. ${VIVIENDA}` },
   { name: 'ustasovka', displayName: 'Ustasovka', category: 'vivienda', description: `Coste: 2 de Madera y 2 de Piedra. ${VIVIENDA}` },
 
-  { name: 'granja', displayName: 'Granja', category: 'ganaderia', description: null },
   { name: 'granja-pequena', displayName: 'Granja Pequeña', category: 'ganaderia', description: 'Coste: 4 de Madera y 1 de Piedra. Alberga 4 animales.' },
   { name: 'granja-grande', displayName: 'Granja Grande', category: 'ganaderia', description: 'Coste: 8 de Madera y 1 de Piedra. Alberga 8 animales.' },
 
