@@ -1,21 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags, ChannelType } from 'discord.js';
 import { listCategories, createAndRegisterCategory } from '../../services/modmailCategoryService.js';
 import { requireRolepriest } from '../../utils/permissions.js';
@@ -40,7 +24,6 @@ export default {
     .addSubcommand(sub =>
       sub.setName('listar').setDescription('Lista las categorías registradas y cuántos canales tiene cada una')
     ),
-
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;

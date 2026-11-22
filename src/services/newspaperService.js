@@ -11,9 +11,7 @@ const SQL = {
     INSERT INTO ${T.newspapers} (player_id, item_id, discord_channel_id, channel_name)
     VALUES (?, ?, ?, ?)
   `,
-  countByPlayer: `SELECT COUNT(*) AS cnt FROM ${T.newspapers} WHERE player_id = ?`,
   getPlayerId:   `SELECT id FROM ${T.players} WHERE discord_id = ?`,
-  getItemId:     `SELECT id FROM ${T.items} WHERE name = ?`,
 };
 
 async function _resolveNewspaperCategory(guild) {
@@ -33,64 +31,6 @@ async function _resolveNewspaperCategory(guild) {
     );
   }
   return category;
-}
-
-export async function createNewspaperChannel(guild, player, item) {
-  const category = await _resolveNewspaperCategory(guild);
-
-  const playerRow = await queryOne(SQL.getPlayerId, [player.discord_id]);
-  const { cnt }    = await queryOne(SQL.countByPlayer, [playerRow.id]);
-  const displayName = player.character_name ?? player.username;
-  const channelName = `periodico-${slugify(displayName)}-${cnt + 1}`;
-
-  let channel;
-  try {
-    channel = await guild.channels.create({
-      name:   channelName,
-      type:   ChannelType.GuildText,
-      parent: category.id,
-      topic:  `Periódico de ${displayName}`,
-      permissionOverwrites: [
-        {
-          id:    guild.roles.everyone.id,
-          allow: [PermissionFlagsBits.ViewChannel],
-          deny:  [PermissionFlagsBits.SendMessages],
-        },
-        {
-          id:    player.discord_id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ManageMessages,
-            PermissionFlagsBits.ManageChannels,
-            PermissionFlagsBits.EmbedLinks,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.AddReactions,
-          ],
-        },
-      ],
-    });
-  } catch (err) {
-    throw new Error(
-      `No se pudo crear el canal del periódico: ${err.message}. ` +
-      '¿Tiene el bot el permiso "Gestionar canales" en el servidor?'
-    );
-  }
-
-  const itemRow = await queryOne(SQL.getItemId, [item.name]);
-  await execute(SQL.insert, [playerRow.id, itemRow.id, channel.id, channel.name]);
-
-  logger.info(`[Newspaper] Canal creado: #${channel.name} (${channel.id}) para ${displayName}`);
-
-  await channel
-    .send(
-      `🗞️ **¡Bienvenido a tu periódico, ${displayName}!**\n` +
-      `Este canal es tuyo: puedes escribir, gestionar mensajes y renombrarlo. ` +
-      `El resto del servidor puede leerlo, pero no escribir aquí.`
-    )
-    .catch(err => logger.warn(`[Newspaper] No se pudo enviar el mensaje de bienvenida: ${err.message}`));
-
-  return channel;
 }
 
 export async function createPrintingPressChannel(guild, player, chosenName) {

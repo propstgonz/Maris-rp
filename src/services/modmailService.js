@@ -3,9 +3,8 @@ import { queryOne, query } from '../database/index.js';
 import { T } from '../database/tables.js';
 import logger from '../utils/logger.js';
 import { getAvatarUrl } from '../utils/playerAvatar.js';
-import { slugify, originPhrase, genderLabel } from '../utils/text.js';
+import { slugify, genderLabel } from '../utils/text.js';
 import { listCategories, pickCategoryWithRoom } from './modmailCategoryService.js';
-import { getAlertPreferences } from './playerAlertService.js';
 
 const SQL = {
   findByModmailChannel: `SELECT * FROM ${T.players} WHERE modmail_channel_id = ?`,
@@ -127,13 +126,7 @@ function buildCharacterInfoEmbed(player, member) {
   const avatarUrl = getAvatarUrl(player, 'modmail channel card');
   if (avatarUrl) embed.setThumbnail(avatarUrl);
 
-  if (player.full_name) embed.addFields({ name: '👤 Nombre completo', value: player.full_name, inline: true });
-  if (player.nationality || player.origin_country) {
-    embed.addFields({ name: '🌍 Origen', value: originPhrase(player.nationality, player.origin_country), inline: true });
-  }
   if (player.gender) embed.addFields({ name: '⚧️ Género', value: genderLabel(player.gender), inline: true });
-  if (player.religion) embed.addFields({ name: '🙏 Religión', value: player.religion, inline: true });
-  if (player.description) embed.addFields({ name: '📝 Descripción', value: player.description });
 
   const accountLines = [`**Usuario:** ${member ? member.user.tag : player.username} (\`${player.discord_id}\`)`];
   if (member) {
@@ -190,12 +183,6 @@ export async function relayDmToChannel(client, player, message) {
 }
 
 export async function relayChannelToDm(client, player, message) {
-  const prefs = await getAlertPreferences(player.discord_id);
-  if (prefs && !prefs.channelToDm) {
-    await message.react('🔕').catch(() => {});
-    return false;
-  }
-
   const user = await client.users.fetch(player.discord_id).catch(() => null);
   if (!user) return false;
 
@@ -231,10 +218,8 @@ export async function notifyDeath(client, player, reason, { permadeath = false }
       `Ya puedes usar \`/personaje crear\` para empezar una historia nueva cuando quieras.`
     : `💀 Tu personaje **${name}** ha muerto.\n` +
       `**Motivo:** ${reason}\n\n` +
-      `Tienes dos opciones:\n` +
-      `1️⃣ **Esperar** — Staff puede revivirte hasta 7 días desde ahora con \`/revive personaje_id:${player.id}\`.\n` +
-      `2️⃣ **Rendirte** — si prefieres no esperar, usa \`/personaje rendirse\` para renunciar a este personaje ` +
-      `ya mismo y poder crear uno nuevo al momento. ⚠️ Es definitivo: se pierde inventario y progreso, y no hay vuelta atrás.`;
+      `Staff puede revivirte hasta 7 días desde ahora con \`/revive personaje_id:${player.id}\`. ` +
+      `Pasado ese plazo el personaje se borra y podrás crear uno nuevo.`;
 
   await user.send(message).catch(() => {});
 }
@@ -249,8 +234,7 @@ export function buildDeathModmailNotice(player, reason, permadeath = false) {
   }
   return (
     `💀 **${name}** ha muerto: ${reason}.\n` +
-    `Se puede revivir con \`/revive personaje_id:${player.id}\` durante los próximos 7 días, ` +
-    `o el jugador puede rendirse antes con \`/personaje rendirse\` para empezar de cero ya mismo.`
+    `Se puede revivir con \`/revive personaje_id:${player.id}\` durante los próximos 7 días.`
   );
 }
 

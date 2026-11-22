@@ -1,37 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { SlashCommandBuilder, ChannelType, OverwriteType, MessageFlags, EmbedBuilder } from 'discord.js';
 import { getPlayerByDiscordId } from '../../services/playerService.js';
 import { relinkModmailChannel } from '../../services/characterLifecycleService.js';
@@ -54,7 +22,6 @@ export default {
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(true)
     ),
-
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;
@@ -79,10 +46,6 @@ export default {
     } catch (err) {
       return interaction.editReply(`❌ ${err.message}`);
     }
-
-
-
-
 
     const notes = [];
 

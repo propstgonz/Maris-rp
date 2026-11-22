@@ -1,52 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { queryOne, execute } from '../database/index.js';
 import { T } from '../database/tables.js';
@@ -68,27 +21,17 @@ const SQL = {
   pruneOld: `DELETE FROM ${T.terminal_jobs} WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 DAY)`,
 };
 
-
 export async function enqueueCommand(commandLine, requestedByDiscordId) {
   const result = await execute(SQL.insert, [commandLine.trim(), requestedByDiscordId]);
   return result.lastInsertRowid;
 }
 
-
 export async function getJobResult(id) {
   return (await queryOne(SQL.getById, [id])) ?? null;
 }
 
-
-
-
-
-
-
 export function tokenize(line) {
   const tokens = [];
-
-
 
   const re = /(\S+?):"([^"]*)"|"([^"]*)"|(\S+)/g;
   let m;
@@ -97,7 +40,6 @@ export function tokenize(line) {
   }
   return tokens;
 }
-
 
 export function parseCommandArgs(line, commandJSON) {
   const tokens = tokenize(line);
@@ -126,17 +68,10 @@ export function parseCommandArgs(line, commandJSON) {
   return { subcommandName, optionSchema, rawOptions };
 }
 
-
-
 function stripMention(raw) {
   const m = raw.match(/^<@!?(\d+)>$/);
   return m ? m[1] : raw;
 }
-
-
-
-
-
 
 function requireIfNeeded(name, value, required) {
   if (required && (value === null || value === undefined)) {
@@ -145,13 +80,9 @@ function requireIfNeeded(name, value, required) {
   return value;
 }
 
-
 export async function buildSyntheticInteraction(client, command, job) {
   const commandJSON = command.data.toJSON();
   const { subcommandName, optionSchema, rawOptions } = parseCommandArgs(job.command_line, commandJSON);
-
-
-
 
   const resolvedUsers = new Map();
   const resolvedChannels = new Map();
@@ -194,16 +125,8 @@ export async function buildSyntheticInteraction(client, command, job) {
     client,
     user: requestingUser,
 
-
-
     guild: GUILD_ID ? client.guilds.cache.get(GUILD_ID) ?? null : null,
     commandName: command.data.name,
-
-
-
-
-
-
 
     options: {
       getSubcommand: () => subcommandName,
@@ -214,19 +137,12 @@ export async function buildSyntheticInteraction(client, command, job) {
       getUser:    (name, required = false) => requireIfNeeded(name, resolvedUsers.get(name) ?? null, required),
       getChannel: (name, required = false) => requireIfNeeded(name, resolvedChannels.get(name) ?? null, required),
 
-
-
-
       getAttachment: (name, required = false) => {
         if (required) {
           throw new Error(`La opción "${name}" es un adjunto de fichero obligatorio — el terminal no admite adjuntos, así que este comando no se puede ejecutar desde aquí.`);
         }
         return null;
       },
-
-
-
-
 
       getFocused: () => {
         throw new Error('Este comando usa autocompletado (getFocused()), que el terminal no admite — no se puede ejecutar desde aquí.');
@@ -248,7 +164,6 @@ export async function buildSyntheticInteraction(client, command, job) {
   return { interaction, getOutput: () => outputBlocks.join('\n\n---\n\n') || '(el comando no respondió nada)' };
 }
 
-
 export async function processNextJob(client) {
   const job = await queryOne(SQL.getOldestPending);
   if (!job) return;
@@ -261,25 +176,12 @@ export async function processNextJob(client) {
 
     const { interaction, getOutput } = await buildSyntheticInteraction(client, command, job);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     const subcommandName = interaction.options.getSubcommand();
     const effectivePermission = command.category === 'staff'
-      ? 'staff'
+      ? 'rolepriest'
       : resolveEffectivePermission(command, subcommandName);
 
-    if (effectivePermission !== 'staff' && effectivePermission !== 'mapPriest') {
+    if (effectivePermission !== 'rolepriest') {
       const target = subcommandName ? `"/${command.data.name} ${subcommandName}"` : `"/${command.data.name}"`;
       throw new Error(`${target} no está disponible desde el terminal (solo subcomandos de Staff).`);
     }
@@ -294,7 +196,6 @@ export async function processNextJob(client) {
   }
 }
 
-
 export function startTerminalJobPoller(client) {
   startGuardedInterval(async () => {
     try {
@@ -306,7 +207,6 @@ export function startTerminalJobPoller(client) {
   }, POLL_INTERVAL_MS);
   logger.info(`[Terminal] ✔ Sondeo de comandos del terminal web iniciado (cada ${POLL_INTERVAL_MS / 1000}s).`);
 }
-
 
 export async function pruneOldTerminalJobs() {
   return (await execute(SQL.pruneOld)).changes;

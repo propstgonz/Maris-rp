@@ -1,36 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { queryOne, execute, withTransaction } from '../database/index.js';
@@ -40,12 +9,9 @@ import { startGuardedInterval } from '../utils/guardedInterval.js';
 
 const STATE_KEY = 'bot_instances';
 
-
 const HEARTBEAT_MS = 30_000;
 
-
 const STALE_MS = HEARTBEAT_MS * 3;
-
 
 export const INSTANCE_ID = `${os.hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`;
 
@@ -57,7 +23,6 @@ const SQL = {
   `,
 };
 
-
 async function readInstances() {
   const row = await queryOne(SQL.get, [STATE_KEY]);
   if (!row?.value) return {};
@@ -68,7 +33,6 @@ async function readInstances() {
     return {};
   }
 }
-
 
 async function touchAndPrune() {
   return withTransaction(async () => {
@@ -85,7 +49,6 @@ async function touchAndPrune() {
   });
 }
 
-
 export async function listLiveInstances() {
   const cutoff = Date.now() - STALE_MS;
   return Object.entries(await readInstances())
@@ -94,15 +57,12 @@ export async function listLiveInstances() {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-
 export async function startInstanceGuard() {
   const check = async () => {
     const instances = await touchAndPrune();
     const others = Object.keys(instances).filter(id => id !== INSTANCE_ID);
 
     if (others.length > 0) {
-
-
 
       logger.error(
         `[InstanceGuard] ⚠️ HAY ${others.length + 1} INSTANCIAS DEL BOT VIVAS A LA VEZ con el mismo token. ` +
@@ -116,9 +76,6 @@ export async function startInstanceGuard() {
 
   await check();
   const timer = startGuardedInterval(check, HEARTBEAT_MS);
-
-
-
 
   timer.unref?.();
   logger.info(`[InstanceGuard] ✔ Vigilancia de instancias activa (id: ${INSTANCE_ID}, latido cada ${HEARTBEAT_MS / 1000}s).`);

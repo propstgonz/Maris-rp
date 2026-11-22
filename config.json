@@ -5,9 +5,6 @@
     "staff": [
       "1538794336760766495"
     ],
-    "mapPriest": [
-      "1538794336760766495"
-    ],
     "player": [
       "1283903420646035558"
     ],
@@ -18,20 +15,6 @@
     "logs": "1506344027128336447",
     "announcements": "1506344027128336447",
     "transactions": "1506488447681036338"
-  },
-  "game": {
-    "maxHp": 10,
-    "maxHunger": 10,
-    "startingLaburo": 10,
-    "starvationHpLossPerDay": 4,
-    "wellFedHpRegenPerDay": 4,
-    "dailyResetCron": "0 0 * * *",
-    "meleeDamage": 1,
-    "meleeSelfDamage": 1,
-    "surrenderSurvivalPercent": 75,
-    "surrenderLootMinItems": 1,
-    "surrenderLootMaxItems": 3,
-    "breedingCooldownHours": 24
   },
   "images": {
     "defaultAvatar": "avatars/default.png",

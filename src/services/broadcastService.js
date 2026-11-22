@@ -1,33 +1,13 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import { listRegisteredPlayers } from './playerService.js';
+import { listPlayers } from './playerService.js';
 import logger from '../utils/logger.js';
 
 const DM_DELAY_MS = 300;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-
 export async function sendBroadcast(client, message, imageUrls = []) {
-  const targets = await listRegisteredPlayers();
+  const targets = await listPlayers();
   const dmText = `📢 **Aviso de Staff**\n\n${message}`;
 
   let sent = 0;

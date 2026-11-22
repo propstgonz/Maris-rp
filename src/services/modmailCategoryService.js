@@ -1,31 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { ChannelType } from 'discord.js';
 import { query, queryOne, execute } from '../database/index.js';
 import { T } from '../database/tables.js';
@@ -40,11 +14,9 @@ const SQL = {
   setDisplayName:    `UPDATE ${T.modmail_categories} SET display_name = ? WHERE id = ?`,
 };
 
-
 export async function listCategories() {
   return query(SQL.listAll);
 }
-
 
 export async function addCategory(discordCategoryId, displayName = null) {
   if (await queryOne(SQL.findByDiscordId, [discordCategoryId])) {
@@ -53,7 +25,6 @@ export async function addCategory(discordCategoryId, displayName = null) {
   await execute(SQL.insert, [discordCategoryId, displayName]);
   return queryOne(SQL.findByDiscordId, [discordCategoryId]);
 }
-
 
 export async function pickCategoryWithRoom(guild, allChannels = null) {
   const channels = allChannels ?? await guild.channels.fetch().catch(() => null);
@@ -74,7 +45,6 @@ export async function pickCategoryWithRoom(guild, allChannels = null) {
   }
   return null;
 }
-
 
 export async function createAndRegisterCategory(guild, name) {
   const existing = await listCategories();

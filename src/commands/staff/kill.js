@@ -1,24 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { markDeceased, finalizeGraceDeath } from '../../services/characterLifecycleService.js';
 import { getPlayerByDiscordId } from '../../services/playerService.js';
@@ -44,15 +25,11 @@ export default {
         .setRequired(false)
     ),
 
-
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;
 
     const targetUser = interaction.options.getUser('jugador', true);
     const motivo      = interaction.options.getString('motivo') ?? 'eliminado por Staff';
-
-
-
 
     const existing = await getPlayerByDiscordId(targetUser.id);
     const wasInGrace = Boolean(existing?.character_created_at && !existing.is_alive);
@@ -79,9 +56,9 @@ export default {
       .setDescription(
         wasInGrace
           ? `El personaje seguía en periodo de gracia (7 días) — Staff ha adelantado el borrado en vez de esperar a que venciera solo. ` +
-            `El personaje y todos sus datos (inventario, efectos, identidad) ya se han borrado. **No hay forma de revivirlo.** ` +
+            `El personaje y todos sus datos (inventarios e identidad) ya se han borrado. **No hay forma de revivirlo.** ` +
             `El jugador ya puede usar \`/personaje crear\` para empezar una historia nueva.`
-          : `Sin ventana de gracia: el personaje y todos sus datos (inventario, efectos, identidad) ` +
+          : `Sin ventana de gracia: el personaje y todos sus datos (inventarios e identidad) ` +
             `ya se han borrado. **No hay forma de revivirlo.** El jugador ya puede usar \`/personaje crear\` ` +
             `para empezar una historia nueva.`
       )
@@ -90,11 +67,6 @@ export default {
 
     const avatarUrl = getAvatarUrl(player, '/kill');
     if (avatarUrl) embed.setThumbnail(avatarUrl);
-
-
-
-
-
 
     if (ANNOUNCE_CH) {
       const guild   = resolveGuild(interaction);

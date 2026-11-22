@@ -1,40 +1,8 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import logger from './logger.js';
 
-
-
 const NGINX_BASE = process.env.NGINX_BASE_URL?.replace(/\/$/, '') ?? '';
-
-
-
-
-
-
-
-const MAP_SERVER_BASE = process.env.MAP_SERVER_PUBLIC_URL?.replace(/\/$/, '') ?? '';
-
-
-export function getWorldMapUrl() {
-  if (!MAP_SERVER_BASE) return null;
-  return looksPubliclyReachable(MAP_SERVER_BASE) ? `${MAP_SERVER_BASE}/mapamundi` : null;
-}
-
 
 export function looksPubliclyReachable(candidate) {
   let u;
@@ -49,7 +17,6 @@ export function looksPubliclyReachable(candidate) {
   if (/^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
   return true;
 }
-
 
 export function buildAssetUrl(relativePath, logContext = 'publicUrl') {
   if (!NGINX_BASE || !relativePath) return null;

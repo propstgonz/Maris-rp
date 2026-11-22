@@ -1,20 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { Events, ChannelType } from 'discord.js';
 import logger from '../utils/logger.js';
 import { getPlayerByDiscordId } from '../services/playerService.js';
@@ -28,11 +13,9 @@ export default {
   name: Events.MessageCreate,
   once: false,
 
-
   async execute(message, client) {
 
     if (message.author.bot) return;
-
 
     if (message.channel.type === ChannelType.DM) {
       const player = await getPlayerByDiscordId(message.author.id);
@@ -61,7 +44,6 @@ export default {
       }
       return;
     }
-
 
     const player = await findPlayerByModmailChannelId(message.channelId);
     if (!player) return;
