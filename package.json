@@ -13,7 +13,8 @@
     "test:smoke": "node scripts/ci-smoke-test.mjs",
     "deploy-commands": "node scripts/deploy-commands.js",
     "test:commands": "node scripts/verify-command-defs.mjs",
-    "api": "node src/apiServer.js"
+    "api": "node src/apiServer.js",
+    "test:integration": "node --experimental-test-module-mocks --test --test-concurrency=1 \"test/integration/*.int.mjs\""
   },
   "dependencies": {
     "compression": "^1.7.4",
