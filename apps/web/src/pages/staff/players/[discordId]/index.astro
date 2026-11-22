@@ -2,47 +2,199 @@
 import BaseLayout from '../../../../layouts/BaseLayout.astro';
 import { icon } from '../../../../lib/icons';
 import { requireRolepriest } from '../../../../lib/auth';
-import { fetchPlayer, ApiError, type PlayerRow } from '../../../../lib/apiClient';
+import { fetchFicha, ApiError, type Ficha, type FichaGood, type FichaSpell, type StatMap } from '../../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
 if (guard instanceof Response) return guard;
 
 const { discordId } = Astro.params;
 
-let player: PlayerRow | null = null;
+let ficha: Ficha | null = null;
 let loadError: string | null = null;
 try {
-  player = await fetchPlayer(Astro, discordId!);
+  ficha = await fetchFicha(Astro, discordId!);
 } catch (err) {
-  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar el jugador.';
+  loadError = err instanceof ApiError ? err.message : 'No se pudo cargar la ficha.';
 }
 
-const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+const STATS: [keyof StatMap, string][] = [
+  ['potencia', 'Potencia'],
+  ['intuicion', 'Intuición'],
+  ['chiripa', 'Chiripa'],
+  ['autismo', 'Autismo'],
+  ['resistencia', 'Resistencia'],
+  ['donjuanismo', 'Donjuanismo'],
+  ['agilidad', 'Agilidad'],
+];
+
+const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'long', timeStyle: 'short' });
+const numFmt = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 });
 const formatDate = (value: string | null) => (value ? dateFmt.format(new Date(value)) : '—');
+const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+function groupBy<T>(rows: T[], key: (row: T) => string): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    groups.set(k, [...(groups.get(k) ?? []), row]);
+  }
+  return [...groups.entries()];
+}
+
+const goodsByCategory: [string, FichaGood[]][] = ficha ? groupBy(ficha.goods, g => g.category ?? 'Sin categoría') : [];
+const spellsBySchool: [string, FichaSpell[]][] = ficha ? groupBy(ficha.spells, s => s.school) : [];
+const profile = ficha?.profile;
+const menhirEffect = profile?.menhir
+  ? [profile.menhir.description, profile.menhir.magic_bonus ? `Bonificación de magia: ${signed(profile.menhir.magic_bonus)}` : null, profile.menhir.magic_to_life ? 'La magia se convierte en vida extra.' : null].filter(Boolean).join(' ')
+  : '';
 ---
-<BaseLayout title="Jugador">
+<BaseLayout title="Ficha de jugador">
   <div class="catalog-view">
     <div class="catalog-toolbar">
-      <h2><Fragment set:html={icon('users')} />{player?.character_name ?? player?.username ?? 'Jugador'}</h2>
+      <h2><Fragment set:html={icon('users')} />{ficha?.player.character_name ?? 'Ficha de jugador'}</h2>
       <a class="btn-secondary" href="/staff/players"><Fragment set:html={icon('chevron-left', { size: 15 })} />Jugadores</a>
     </div>
-    {loadError ? (
-      <p class="hint">{loadError}</p>
-    ) : player && (
-      <div class="admin-table-wrap">
-        <img class="player-avatar" src={player.avatar_url ?? `/api/discord-avatar/${player.discord_id}`} alt="" width="96" height="96" />
-        <table class="admin-table">
-          <tbody>
-            <tr><th>Personaje</th><td>{player.character_name ?? '—'}</td></tr>
-            <tr><th>Usuario</th><td>{player.username}</td></tr>
-            <tr><th>Discord ID</th><td>{player.discord_id}</td></tr>
-            <tr><th>Género</th><td>{player.gender ?? '—'}</td></tr>
-            <tr><th>Estado</th><td>{player.is_alive ? 'Vivo' : 'Muerto'}</td></tr>
-            <tr><th>Creado</th><td>{formatDate(player.character_created_at)}</td></tr>
-            {!player.is_alive && <tr><th>Fallecido</th><td>{formatDate(player.died_at)}</td></tr>}
-          </tbody>
-        </table>
-      </div>
+    {loadError && <p class="hint">{loadError}</p>}
+    {ficha && profile && (
+      <>
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('users', { size: 16 })} />Identidad</h3>
+          <div class="ficha-identity">
+            <img class="player-avatar" src={ficha.player.avatar_url ?? `/api/discord-avatar/${ficha.player.discord_id}`} alt="" width="96" height="96" />
+            <table class="admin-table">
+              <tbody>
+                <tr><th>Personaje</th><td>{ficha.player.character_name ?? '—'}</td></tr>
+                <tr><th>Discord ID</th><td>{ficha.player.discord_id}</td></tr>
+                <tr><th>Género</th><td>{ficha.player.gender ?? '—'}</td></tr>
+                <tr><th>Edad</th><td>{ficha.player.age ?? '—'}</td></tr>
+                <tr><th>Creado</th><td>{formatDate(ficha.player.character_created_at)}</td></tr>
+                <tr><th>Estado</th><td><span class={`status-pill ${ficha.player.is_alive ? 'status-pill-alive' : 'status-pill-dead'}`}>{ficha.player.is_alive ? 'Vivo' : 'Muerto'}</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('sparkles', { size: 16 })} />Perfil</h3>
+          <div class="admin-table-wrap admin-table-scroll">
+            <table class="admin-table">
+              <thead><tr><th>Estadística</th><th>Base</th><th>Mod.</th><th>Total</th></tr></thead>
+              <tbody>
+                {STATS.map(([key, label]) => (
+                  <tr>
+                    <td>{label}</td>
+                    <td>{profile.base[key]}</td>
+                    <td>{signed(profile.effective[key] - profile.base[key])}</td>
+                    <td>{profile.effective[key]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="hint">Puntos libres: {profile.freePoints} · Magia: {numFmt.format(profile.magic.magia)} · Vida extra: {numFmt.format(profile.magic.vidaExtra)}</p>
+          <div class="admin-table-wrap admin-table-scroll">
+            <table class="admin-table ficha-wrap">
+              <tbody>
+                <tr><th>Raza</th><td>{profile.race ? profile.race.name : 'Sin raza'}</td></tr>
+                {profile.race?.traits && <tr><th>Rasgos</th><td>{profile.race.traits}</td></tr>}
+                <tr><th>Menhir</th><td>{profile.menhir ? profile.menhir.name : 'Sin menhir'}</td></tr>
+                {profile.menhir && <tr><th>Efecto</th><td>{menhirEffect}</td></tr>}
+                <tr>
+                  <th>Estado civil</th>
+                  <td>
+                    {profile.civil.label}
+                    {profile.civil.spouse && (
+                      <> con <a href={`/staff/players/${encodeURIComponent(profile.civil.spouse.discordId)}`}>{profile.civil.spouse.characterName ?? profile.civil.spouse.discordId}</a></>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('flag', { size: 16 })} />NPCs</h3>
+          {ficha.npcs.length === 0 ? <p class="hint">Sin NPCs.</p> : (
+            <div class="admin-table-wrap admin-table-scroll">
+              <table class="admin-table">
+                <thead><tr><th>Nombre</th><th>Cantidad</th></tr></thead>
+                <tbody>{ficha.npcs.map(n => <tr><td>{n.name}</td><td>{numFmt.format(n.count)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('package', { size: 16 })} />Bienes</h3>
+          {goodsByCategory.length === 0 ? <p class="hint">Sin bienes.</p> : goodsByCategory.map(([category, goods]) => (
+            <div class="admin-table-wrap admin-table-scroll">
+              <table class="admin-table">
+                <thead><tr><th>{category}</th><th>Cantidad</th></tr></thead>
+                <tbody>{goods.map(g => <tr><td>{g.display_name}</td><td>{numFmt.format(g.quantity)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ))}
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('building', { size: 16 })} />Propiedades</h3>
+          {ficha.properties.length === 0 ? <p class="hint">Sin propiedades.</p> : (
+            <div class="admin-table-wrap admin-table-scroll">
+              <table class="admin-table">
+                <thead><tr><th>Tipo</th><th>Nombre</th><th>Categoría</th><th>Nivel</th><th>Ubicación</th></tr></thead>
+                <tbody>
+                  {ficha.properties.map(p => (
+                    <tr><td>{p.type_display_name}</td><td>{p.name ?? '—'}</td><td>{p.category}</td><td>{p.level}</td><td>{p.location ?? '—'}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('book', { size: 16 })} />Escuelas</h3>
+          <div class="admin-table-wrap admin-table-scroll">
+            <table class="admin-table">
+              <thead><tr><th>Escuela</th><th>Nivel</th><th>Siguiente meta</th><th>Enfriamiento</th></tr></thead>
+              <tbody>
+                {ficha.schools.schools.map(s => (
+                  <tr>
+                    <td>{s.school.name}</td>
+                    {s.active ? (
+                      <>
+                        <td>{s.rank > 0 ? `${s.rank} · ${s.levelName}` : 'Sin iniciar'}</td>
+                        <td>{s.next ? `${s.next.name} (umbral ${s.next.threshold})` : 'Nivel máximo'}</td>
+                        <td>{s.retryAfter ? formatDate(s.retryAfter) : '—'}</td>
+                      </>
+                    ) : (
+                      <td colspan="3">Excluida</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="hint">Magia: {numFmt.format(ficha.schools.magic.magia)} · Vida extra: {numFmt.format(ficha.schools.magic.vidaExtra)}</p>
+        </section>
+
+        <section class="ficha-section">
+          <h3><Fragment set:html={icon('scroll', { size: 16 })} />Conjuros desbloqueados</h3>
+          {spellsBySchool.length === 0 ? <p class="hint">Sin conjuros desbloqueados.</p> : spellsBySchool.map(([school, spells]) => (
+            <div class="admin-table-wrap admin-table-scroll">
+              <table class="admin-table ficha-wrap">
+                <thead><tr><th>{school}</th><th>Nivel</th><th>Coste</th><th>Descripción</th></tr></thead>
+                <tbody>
+                  {spells.map(s => (
+                    <tr><td>{s.name}</td><td>{s.min_rank} · {s.levelName}</td><td>{numFmt.format(s.cost_amount)} {s.cost_resource}</td><td>{s.description}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </section>
+      </>
     )}
   </div>
 </BaseLayout>
