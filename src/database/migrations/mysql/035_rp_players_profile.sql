@@ -127,8 +127,8 @@ CREATE TABLE consent_requests (
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at      DATETIME NOT NULL,
     resolved_at     DATETIME DEFAULT NULL,
-    KEY idx_to_status (to_player_id, status),
-    KEY idx_from_status (from_player_id, status),
+    KEY idx_to (to_player_id),
+    KEY idx_from (from_player_id),
     CONSTRAINT fk_consent_requests_from FOREIGN KEY (from_player_id) REFERENCES players(id),
     CONSTRAINT fk_consent_requests_to FOREIGN KEY (to_player_id) REFERENCES players(id)
 );

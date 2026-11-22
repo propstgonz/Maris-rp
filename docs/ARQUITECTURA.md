@@ -128,7 +128,7 @@ consent_requests(
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at DATETIME NOT NULL,
   resolved_at DATETIME NULL,
-  KEY idx_to_status (to_player_id, status), KEY idx_from_status (from_player_id, status)
+  KEY idx_to (to_player_id), KEY idx_from (from_player_id)        -- sin status: cambiar status no debe reescribir una entrada de índice con FK (toma bloqueos S en players)
 )
 
 schools(
