@@ -3,7 +3,6 @@
 # solo `dist/` + las dependencias de PRODUCCIÓN (@astrojs/node, el único
 # paquete que el server compilado necesita en pie) — la imagen final no
 # lleva el compilador de Astro/Vite/Tailwind, solo el server ya construido.
-# Ver docs/plan.md §2.5.
 #
 # node:22-alpine por consistencia con el Dockerfile de la raíz (bot/
 # api) — esta imagen no necesita compilar nada nativo, porque esta

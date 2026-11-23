@@ -21,7 +21,6 @@ node_modules/
 .vscode/
 .idea/
 
-# apps/web (Astro, Fase 2 — ver docs/plan.md §2)
 dist/
 .astro/
 ssh_server.bat
