@@ -1,6 +1,6 @@
 # Guía de Staff — Rolepriest
 
-Esta guía es para quien modera la partida: qué hace el bot por su cuenta, qué decide un Rolepriest y con qué comando. Las reglas salen de *El Tomegrama*; el bot guarda las fichas y aplica las reglas mecánicas, y el Rolepriest arbitra todo lo demás. La referencia completa de comandos está en `docs/COMANDOS.md` del repositorio; las decisiones de interpretación, en `docs/ADR.md`. Para lo que ve un jugador, ver `PLAYER_GUIDE.md` o `/ayuda` en Discord.
+Esta guía es para quien modera la partida: qué hace el bot por su cuenta, qué decide un Rolepriest y con qué comando. Las reglas salen de El Tomegrama; el bot guarda las fichas y aplica las reglas mecánicas, y el Rolepriest arbitra todo lo demás. La referencia completa de comandos está en `docs/COMANDOS.md` del repositorio; las decisiones de interpretación, en `docs/ADR.md`. Para lo que ve un jugador, ver `PLAYER_GUIDE.md` o `/ayuda` en Discord.
 
 ---
 
