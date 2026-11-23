@@ -85,7 +85,7 @@ ALTER TABLE players
 CREATE TABLE player_npcs (
     id                     INT PRIMARY KEY AUTO_INCREMENT,
     owner_player_id        INT NOT NULL,
-    name                   VARCHAR(80) NOT NULL,
+    name                   VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NOT NULL,
     created_by_discord_id  VARCHAR(191) DEFAULT NULL,
     created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_owner_name (owner_player_id, name),
@@ -99,8 +99,10 @@ CREATE TABLE marriages (
     created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ended_at                DATETIME DEFAULT NULL,
     end_reason              ENUM('divorcio','viudedad','anulacion') DEFAULT NULL,
+    ended_by_player_id      INT DEFAULT NULL,
     CONSTRAINT fk_marriages_proposed_by FOREIGN KEY (proposed_by_player_id) REFERENCES players(id),
-    CONSTRAINT fk_marriages_accepted_by FOREIGN KEY (accepted_by_player_id) REFERENCES players(id)
+    CONSTRAINT fk_marriages_accepted_by FOREIGN KEY (accepted_by_player_id) REFERENCES players(id),
+    CONSTRAINT fk_marriages_ended_by FOREIGN KEY (ended_by_player_id) REFERENCES players(id)
 );
 
 CREATE TABLE marriage_members (
@@ -133,4 +135,5 @@ CREATE TABLE consent_requests (
     CONSTRAINT fk_consent_requests_to FOREIGN KEY (to_player_id) REFERENCES players(id)
 );
 
-INSERT IGNORE INTO rp_ops.system_state (`key`, value) VALUES ('character_creation_cooldown_hours', '336');
+INSERT INTO rp_ops.system_state (`key`, value) VALUES ('character_creation_cooldown_hours', '336')
+ON DUPLICATE KEY UPDATE value = IF(value = '0', '336', value);

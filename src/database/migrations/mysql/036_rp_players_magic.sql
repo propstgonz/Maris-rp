@@ -68,9 +68,9 @@ INSERT INTO schools (slug, name, description, secondary_stat, secondary_divisor,
     ('encantamiento', 'Encantamiento', 'Que se puede decir de esta Escuela, se trata de la menos conocida, recluida a habitaciones con runas y salas ocultas el Encantamiento tiene como único propósito la de enarbolar cualidades y mejoras en sortijas y equipamientos, haciéndolas ampliamente superiores… Las armas y armaduras de los Héroes y Heroínas Legendarias, tales como Ysgramor, son por lo general encantadas por maestros encantadores o mismamente por los Divinos.', 'potencia', 1, 0, 6);
 
 INSERT INTO mastery_levels (`rank`, slug, name, threshold, requires_mentor) VALUES
-    (1, 'principiante', 'Principiante', 19.0, 0),
+    (1, 'principiante', 'Principiante', 19.0, 1),
     (2, 'aprendiz', 'Aprendiz', 19.0, 1),
-    (3, 'habil', 'Hábil', 21.0, 1),
+    (3, 'habil', 'Hábil', 20.5, 1),
     (4, 'experto', 'Experto', 24.0, 1),
     (5, 'maestro', 'Maestro', 28.0, 1);
 
