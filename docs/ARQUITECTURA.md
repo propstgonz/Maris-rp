@@ -33,8 +33,12 @@ domain/  (puro)       database/  (query, queryOne, execute, withTransaction, T)
 2. Un traspaso entre jugadores es una sola transacción: origen con guarda de dueño/cantidad, después destino.
 3. Toda escritura sobre algo de un jugador lleva el dueño esperado en el `WHERE`.
 4. Nada de promesas sin `await` dentro de `withTransaction`.
-5. `execute` usa sentencias preparadas: `LIMIT ?` no funciona con parámetro numérico en mysql2. Valida el entero en JS (`Number.isInteger`, rango) e interpólalo.
-6. Cero comentarios en el código (ver `CLAUDE.md`).
+5. Los enteros de `LIMIT`/`OFFSET` se validan en JS y se interpolan (`goodsService`, `magicService`, `npcHoldingService`) por coherencia entre servicios. No es una limitación de mysql2 3: `auditLogService` pasa `LIMIT ?` como parámetro y funciona.
+6. Orden de bloqueos: primero las filas de `players` en orden ascendente de id (`playerService.lockPlayersInTx`, `marriageService.lockCoupleInTx`), después el resto. Toda operación sobre dos jugadores (solicitudes, matrimonio, muerte) empieza así.
+7. Un índice secundario con una columna FK toma bloqueos S en la tabla padre cuando se actualiza otra columna del índice. Por eso `consent_requests` indexa solo `to_player_id` y `from_player_id`, no `(to_player_id, status)`.
+8. `withTransaction(fn, { retryOnDeadlock })` reintenta la transacción hasta `retryOnDeadlock` veces con espera aleatoria; si el deadlock persiste lanza `UserFacingError`. Lo piden `consentService.createRequest/accept` y `characterLifecycleService` (3 reintentos). Dentro de una transacción ya abierta no reintenta.
+9. Las migraciones se serializan con `GET_LOCK('rp_migrations')` (600 s) porque bot y API migran al arrancar.
+10. Cero comentarios en el código (ver `CLAUDE.md`).
 
 ## Modelo de datos (estado final tras las migraciones 035–041)
 
@@ -96,7 +100,8 @@ marriages(
   accepted_by_player_id INT NOT NULL FK players(id),
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ended_at DATETIME NULL,
-  end_reason ENUM('divorcio','viudedad','anulacion') NULL
+  end_reason ENUM('divorcio','viudedad','anulacion') NULL,
+  ended_by_player_id INT NULL FK players(id)       -- quien divorcia o, en viudedad, el que muere
 )
 
 marriage_members(
@@ -145,8 +150,8 @@ mastery_levels(
   `rank` TINYINT PK, slug VARCHAR(32) NOT NULL UNIQUE, name VARCHAR(64) NOT NULL,
   threshold DECIMAL(4,1) NOT NULL, requires_mentor TINYINT(1) NOT NULL
 )
--- 1 principiante "Principiante" 19 0 | 2 aprendiz "Aprendiz" 19 1 | 3 habil "Hábil" 21 1
--- 4 experto "Experto" 24 1 | 5 maestro "Maestro" 28 1
+-- 1 principiante "Principiante" 19 1 | 2 aprendiz "Aprendiz" 19 1 | 3 habil "Hábil" 20.5 1
+-- 4 experto "Experto" 24 1 | 5 maestro "Maestro" 28 1   (los cinco niveles exigen mentor, pág. 41)
 
 school_progress(
   player_id INT NOT NULL FK players(id),
@@ -226,132 +231,135 @@ Sin cambios de estructura: `audit_log`, `bot_jobs`, `terminal_jobs`, `system_sta
 |---|---|---|
 | Estadística efectiva | base + `races.mod_*` + `menhirs.mod_*` (puede pasar de 6 o ser negativa) | `domain/picarda.js` |
 | Puntos libres | `8 + stat_bonus_points − Σ base` | `domain/picarda.js` |
-| Magia | `25 × max(0, Autismo efectivo) + menhirs.magic_bonus`; con `magic_to_life` la Magia pasa a 0 y se muestra `+ Magia/100` de Vida | `domain/picarda.js` |
-| Estado civil | Casado/a si `open_slot = 1`; Viudo/a si el último matrimonio acabó en `viudedad`; Soltero/a si no | `domain/civilStatus.js` |
+| Magia | `min(25 × max(0, Autismo efectivo), 150 + 25 × max(0, races.mod_autismo)) + menhirs.magic_bonus`; con `magic_to_life` la Magia pasa a 0 y se muestra `+ Magia/100` de Vida. El tope es literal del PDF y solo depende del bono racial: el Menhir del Aprendiz (+1 Autismo) no lo rompe y el del Mago suma aparte | `domain/picarda.js` |
+| Estado civil | Casado/a si `open_slot = 1`; Viudo/a si el último matrimonio (posterior a `character_created_at`) acabó en `viudedad` y `ended_by_player_id` no es el propio jugador (el que muere no queda viudo de sí mismo); Soltero/a si no | `domain/civilStatus.js` |
 | Modificador de tirada | `Autismo_ef + stat2_ef / divisor` (sin redondeo) | `domain/magic.js` |
 | Conjuros desbloqueados | `spells ⋈ schools(is_active=1) ⋈ school_progress` con `min_rank <= level_rank` | `magicService` |
 
-## Módulo `domain/` (contratos exactos)
+## Módulo `domain/` (exports reales)
 
 ```js
 // src/domain/picarda.js
-export const STATS = ['potencia','intuicion','chiripa','autismo','resistencia','donjuanismo','agilidad'];
-export const STAT_LABELS = { potencia:'Potencia', intuicion:'Intuición', chiripa:'Chiripa', autismo:'Autismo',
-                             resistencia:'Resistencia', donjuanismo:'Donjuanismo', agilidad:'Agilidad' };
-export const BASE_POINTS = 8;
-export const MAX_BASE_PER_STAT = 6;
-export function baseStats(playerRow)              // -> { potencia: n, ... } desde stat_*
-export function modifiers(row)                   // -> { potencia: n, ... } desde mod_* de una raza o menhir (todo 0 si row es null)
-export function effectiveStats(playerRow, raceRow, menhirRow) // -> base + raza + menhir
-export function freePoints(playerRow)             // -> 8 + stat_bonus_points - Σ base
-export function magicPoints(effective, menhirRow) // -> { magia, vidaExtra }: magia = 25*max(0,autismo)+magic_bonus; si magic_to_life: { magia: 0, vidaExtra: magia/100 }
-export function validateAllocation(playerRow, stat, n) // -> null | mensaje de error (para explicar un changes===0)
+STATS, STAT_LABELS, BASE_POINTS = 8, MAX_BASE_PER_STAT = 6, MAGIC_PER_AUTISMO = 25, MAGIC_BASE_CAP = 150, MENHIR_CHANGE_MONTHS = 6
+isStat(stat)
+baseStats(playerRow)                       // -> { potencia: n, ... } desde stat_*
+modifiers(row)                             // -> mod_* de una raza o menhir (todo 0 si row es null)
+effectiveStats(playerRow, raceRow, menhirRow)
+spentPoints(playerRow)  freePoints(playerRow)   // 8 + stat_bonus_points - Σ base
+magicPoints(effective, menhirRow, raceRow) // -> { magia, vidaExtra }; tope 150 + 25 * max(0, raceRow.mod_autismo)
+validateAllocation(playerRow, stat, n)     // -> null | mensaje (explica un changes === 0)
+menhirChangeAvailableAt(playerRow)  canChangeMenhir(playerRow, now)
 
 // src/domain/magic.js
-export const RETRY_DAYS = 28;
-export function attemptModifier(effective, school)  // school: { secondary_stat, secondary_divisor }
-export function isSuccess(total, threshold)         // total >= threshold
-export function mentorQualifies(mentorRank, targetRank) // mentorRank >= targetRank
-export function canClaimFreeSchool(effective, playerRow) // effective.autismo >= 6 && !free_school_claimed_at
-export const MENHIR_CHANGE_MONTHS = 6;
-export function canChangeMenhir(playerRow, now)  // sin menhir, o menhir_chosen_at + 6 meses <= now (vive en picarda.js)
+RETRY_DAYS = 28, FREE_SCHOOL_MIN_AUTISMO = 6, MAX_RANK = 5
+attemptModifier(effective, school)         // Autismo + stat secundaria / divisor, sin redondeo
+isSuccess(total, threshold)                // total >= threshold
+thresholdLabel(threshold)                  // "19 o más" | "más de 20" (para 20,5)
+mentorQualifies(mentorRank, targetRank)    // mentorRank >= targetRank
+canClaimFreeSchool(effective, playerRow)
 
 // src/domain/civilStatus.js
-export function civilStatusLabel({ active, lastEndReason, gender }) // 'Soltero/a' | 'Casado/a' | 'Viudo/a' (concuerda con gender si es hombre/mujer)
+civilStatusLabel({ active, lastEndReason, endedByPlayerId, playerId, gender })
 ```
 
-## Servicios (contratos exactos)
+## Servicios (exports reales)
 
-Todos los IDs de entrada son `players.id` salvo donde dice `discordId`. Todos lanzan `UserFacingError` ante un rechazo de regla. `actor` es `{ discordId, username, source: 'discord'|'web' }` y se usa para `logAction`.
+Los IDs de entrada son `players.id` salvo donde dice `discordId`. Los rechazos de regla son `UserFacingError`. `actor` es `{ discordId, username, source: 'discord' | 'web' }`; se pasa tal cual a `logAction({ actor, action, target, details })`.
 
 ```js
+// playerService.js
+getPlayerByDiscordId(discordId)  listPlayers()  findPlayerById(id)
+lockPlayersInTx(ids)                       // SELECT ... FOR UPDATE ordenado por id
+
 // profileService.js
-getPlayerByDiscordId(discordId)            // -> fila players | undefined
-requireLivingPlayer(discordId)             // -> fila players (UserFacingError si no hay personaje vivo)
-getProfile(playerId)                       // -> { player, race, menhir, base, effective, freePoints, magic:{magia,vidaExtra}, menhirChangeAvailableAt, civil:{label, spouse:{id,discordId,characterName}|null} }
-listRaces()                                // -> filas races ordenadas por sort
-allocateStat(playerId, stat, n, actor)     // UPDATE único con guarda; n entero 1..6
+getPlayerByDiscordId (reexportada)
+listRaces()  listMenhirs()
+getProfile(playerId)                       // -> { player, race, menhir, base, effective, freePoints, magic:{magia,vidaExtra}, menhirChangeAvailableAt, civil:{label, spouse} }
+allocateStat(playerId, stat, n, actor)     // UPDATE único con guarda en el WHERE
 grantBonusPoints(playerId, n, actor)       // Rolepriest
 correctStat(playerId, stat, value, actor)  // Rolepriest; value 0..6; no puede dejar Σ > 8 + bonus
 setRace(playerId, raceSlug, actor)         // Rolepriest
-chooseMenhir(playerId, menhirSlug, actor)  // jugador: UPDATE único con guarda (menhir_chosen_at IS NULL OR menhir_chosen_at <= NOW() - INTERVAL 6 MONTH) y menhir distinto
-setMenhir(playerId, menhirSlug|null, actor) // Rolepriest: corrección sin espera (no toca menhir_chosen_at salvo al asignar)
-listMenhirs()
-updateIdentity(playerId, { characterName?, age?, gender? }, actor) // Rolepriest
+chooseMenhir(playerId, menhirSlug, actor)  // jugador: guarda menhir_chosen_at <= NOW() - INTERVAL 6 MONTH y menhir distinto
+setMenhir(playerId, menhirSlug|null, actor) // Rolepriest: sin espera; menhir_chosen_at solo se fija si no había menhir
+setAvatar(playerId, relativeFilename, actor)
+updateIdentity(playerId, { characterName?, age?, gender? }, actor)
 
 // marriageService.js
-propose(fromPlayerId, toPlayerId, actor)            // -> consent_request id (usa consentService.createRequest)
-acceptMarriageInTx(request)                         // llamado por consentService dentro de su transacción
-divorce(playerId, actor)
-annul(playerId, actor)                              // Rolepriest
-endMarriagesOnDeathInTx(playerId)                   // llamado por characterLifecycleService dentro de su transacción
-getCivilStatus(playerId)                            // -> { label, spouse|null, marriageId|null }
+propose(fromPlayerId, toPlayerId, actor)   // -> id de la solicitud (consentService.createRequest)
+acceptMarriageInTx(request)                // lo llama consentService.accept dentro de su transacción
+divorce(playerId, actor)  annul(playerId, actor)   // anulación: Rolepriest
+endMarriagesOnDeathInTx(playerId)          // viudedad, ended_by_player_id = el que muere
+getCivilStatus(playerId)                   // -> { label, spouse|null, marriageId|null }
+findSpouseId(playerId)  lockCoupleInTx(playerId, hintSpouseId)
 
 // consentService.js
-createRequest({ kind, fromPlayerId, toPlayerId, itemId?, quantity?, npcName?, npcCount?, propertyId? }) // TTL 24h
-accept(requestId, actorPlayerId, actor)   // transacción: claim pending->accepted (to_player_id = actor, expires_at > NOW()), despacho por kind
-reject(requestId, actorPlayerId, actor)
-cancel(requestId, actorPlayerId, actor)   // solo el emisor
-cancelAllPendingForPlayerInTx(playerId)
-getRequest(requestId)
+createRequest({ kind, fromPlayerId, toPlayerId, itemId?, quantity?, npcName?, npcCount?, propertyId? })
+                                           // TTL 24 h; máximo 5 pendientes por pareja (de, a); ambos vivos
+accept(requestId, actorPlayerId, actor)    // claim pending->accepted + traspaso en una transacción (retryOnDeadlock 3)
+reject(requestId, actorPlayerId, actor)  cancel(requestId, actorPlayerId, actor)  // cancel: solo el emisor
+getRequest(requestId)  listPendingForPlayer(playerId)  cancelAllPendingForPlayerInTx(playerId)
 
 // npcHoldingService.js
-listGrouped(ownerId, { page, pageSize })  // -> { rows:[{name,count}], total }
-addNpcs(ownerId, name, count, actor)      // count 1..50
-removeNpcs(ownerId, name, count, actor)   // exige changes === count
-transferNpcsInTx(fromId, toId, name, count)
-adminTransferNpcs(fromId, toId, name, count, actor)
+listGrouped(ownerId, { page, pageSize })   // -> { rows:[{name,count}], total }
+addNpcs(ownerId, name, count, actor)  removeNpcs(ownerId, name, count, actor)   // count 1..50
+transferNpcsInTx(fromId, toId, name, count)  adminTransferNpcs(fromId, toId, name, count, actor)
 
 // goodsService.js
-listCategories()  createCategory({name, displayName, emoji?, description?}, actor)
-listTypes({ includeInactive })  findTypeByName(name)
-createType({name, displayName, categoryName?, emoji?, description?}, actor)
-editType(id, {...}, actor)  setTypeActive(id, isActive, actor)
-listInventory(ownerId, { page, pageSize })  // -> { rows:[{item_id,display_name,emoji,category,quantity}], total }
-addGoods(ownerId, itemId, quantity, actor)      // quantity > 0, 2 decimales
-removeGoods(ownerId, itemId, quantity, actor)
-transferGoodsInTx(fromId, toId, itemId, quantity)
-adminTransferGoods(fromId, toId, itemId, quantity, actor)
+validateQuantity(quantity)                 // > 0, hasta 2 decimales
+listCategories()  createCategory({ name, displayName, emoji?, description? }, actor)
+listTypes({ includeInactive })  findTypeByName(name)  searchTypes(text, limit, opts)
+createType({ name, displayName, categoryName?, emoji?, description? }, actor)
+editType(id, { displayName, categoryName, emoji, description }, actor)  setTypeActive(id, isActive, actor)
+listInventory(ownerId, { page, pageSize }) // -> { rows:[{item_id, display_name, emoji, is_active, category, quantity}], total }
+addGoods(ownerId, itemId, quantity, actor)  removeGoods(ownerId, itemId, quantity, actor)
+transferGoodsInTx(fromId, toId, itemId, quantity)  adminTransferGoods(fromId, toId, itemId, quantity, actor)
 
 // propertyService.js
-listTypes({ includeInactive })  createType({...}, actor)  editType(id, {...}, actor)  setTypeActive(id, isActive, actor)
-listProperties(ownerId, { page, pageSize })
-getProperty(propertyId)
+PROPERTY_CATEGORIES
+listTypes({ includeInactive })  searchTypes(text, limit, opts)  createType({ name, displayName, category, emoji, description }, actor)
+editType(id, fields, actor)  setTypeActive(id, isActive, actor)
+listProperties(ownerId, { page, pageSize })  getProperty(propertyId)
 grantProperty(ownerId, typeId, { name?, level?, location? }, actor)
-revokeProperty(propertyId, actor)
+revokeProperty(propertyId, expectedOwnerId, actor)   // el dueño esperado va en el WHERE
 setLevel(propertyId, level, actor)
-transferPropertyInTx(fromId, toId, propertyId)
-adminTransferProperty(propertyId, toId, actor)
+transferPropertyInTx(fromId, toId, propertyId)  adminTransferProperty(propertyId, toId, actor)
 
 // magicService.js
 listSchools({ includeInactive })
-getSchoolsOverview(playerId)              // -> [{school, rank, levelName, next:{rank,name,threshold}|null, retryAfter}] + magic
-claimFreeSchool(playerId, schoolSlug, actor)
-authorizedRoll({ playerId, schoolSlug, mentorPlayerId, mentorLabel, actor }) // -> { roll, modifier, total, threshold, success, targetRank, retryAfter }
-setLevel(playerId, schoolSlug, rank, actor)   // Rolepriest, 0..5
-getUnlockedSpells(playerId, { schoolSlug, page, pageSize })
-getNextSpells(playerId, schoolSlug)           // conjuros del siguiente nivel, marcados bloqueados
+getSchoolsOverview(playerId)               // -> { schools:[{school, rank, levelName, next:{rank,name,threshold,requiresMentor}|null, retryAfter, active}], magic:{magia,vidaExtra}, canClaimFreeSchool }
+claimFreeSchool(playerId, schoolSlug, actor)        // -> { school, name, rank: 1 }
+authorizedRoll({ playerId, schoolSlug, mentorPlayerId?, mentorLabel?, actor })
+                                           // -> { roll, modifier, total, threshold, success, targetRank, levelName, retryAfter }
+setLevel(playerId, schoolSlug, rank, actor)         // Rolepriest, 0..5 -> { school, rank, levelName }
+getUnlockedSpells(playerId, { schoolSlug, page, pageSize })  // -> { rows, total, schoolName, magicToLife }
+getNextSpells(playerId, schoolSlug)        // conjuros del siguiente nivel
 
-// characterLifecycleService.js (se reescribe)
-createCharacter(discordId, username, { characterName, age, gender, raceSlug })
-killCharacter(discordId, reason, actor)   // una transacción: snapshot -> vacía player_npcs, inventory, properties,
-                                          // resetea stats/raza/menhir/bonus/free_school, borra school_progress,
-                                          // endMarriagesOnDeathInTx, cancelAllPendingForPlayerInTx, marca muerte.
-                                          // El snapshot se registra con logAction DESPUÉS del commit.
-reviveCharacter(discordId, actor)
-getCharacterCreationCooldownHours()       // default 336 (2 semanas, Tomegrama p. 31)
+// characterLifecycleService.js
+hasCharacter(discordId)  getCharacterHistory(discordId)  relinkModmailChannel(discordId, channelId)
+getCharacterCreationCooldownHours()  setCharacterCreationCooldownHours(hours, actor)   // por defecto 336
+getCreationWaitSeconds(discordId)
+createCharacter(discordId, username, { characterName, age, gender, raceSlug }, { guild })
+enterGraceDeath(discordId, reason, actor)           // gracia de 7 días: is_alive = 0, nada se vacía
+reviveCharacter(discordId, actor)  reviveByCharacterId(playersRowId, actor)  reviveOnReturn(discordId)
+killCharacter(discordId, reason, actor, { require })  // muerte definitiva en una transacción (retryOnDeadlock 3)
+markDeceased(client, discordId, reason, { permadeath, actor })  // gracia o definitiva + avisos
+finalizeGraceDeath(discordId, client, actor)        // un Rolepriest adelanta la muerte definitiva
+pruneExpiredCharacters(client)                      // cron 00:30 UTC: gracias vencidas -> definitiva
 ```
+
+`killCharacter` es una transacción: cancela solicitudes pendientes, hace el snapshot (personaje, estadísticas, NPCs, bienes, propiedades, escuelas, cónyuge), vacía los tres inventarios y `school_progress`, resetea estadísticas, raza, menhir, puntos extra y escuela gratuita, cierra el matrimonio como viudedad y deja la fila en blanco con `died_at` intacto (o `NOW()` si venía vivo). El snapshot se registra con `logAction` DESPUÉS del commit (`personaje.muerte`).
 
 ## Interfaz de Discord
 
 - Componentes en `src/components/registry.js`, customId `ns:action:owner:ctx` (`src/utils/componentAuth.js`).
-- Namespaces nuevos: `perfil`, `pag`, `consent`, `confirm`, `pj` (creación).
-- Paginador: `src/utils/paginate.js`, 10 entradas por página, botones ◀ ▶, `ctx = <kind>.<page>.<targetPlayerId>`.
-- Respuestas de consulta efímeras. Un jugador solo consulta lo suyo; un Rolepriest pasa `jugador:` para ver a otro.
-- Comandos: ver `docs/COMANDOS.md`.
+- Un solo kit: `confirmAction()` (`src/components/confirm.js`, botones Confirmar/Cancelar, 60 s) y el paginador `src/utils/paginate.js` (10 por página, namespace `pag`).
+- Respuestas de consulta efímeras. Un jugador solo consulta lo suyo; un Rolepriest pasa `jugador:` para ver a otro (`resolveViewTarget`).
+- Un Rolepriest no actúa sobre su propio personaje (`rejectSelfTarget`, `requireOtherTarget` en `src/utils/interactionContext.js`).
+- Comandos: ver [COMANDOS.md](COMANDOS.md).
 
 ## Migraciones
 
 - Fichero nuevo por cambio: `src/database/migrations/mysql/NNN_rp_<schema>_<tema>.sql`. El esquema se deduce del nombre (`rp_players`, `rp_world`, `rp_economy`, `rp_ops`).
 - `splitStatements` corta en `;` + salto de línea: ningún texto de datos puede tener `;` a final de línea.
-- Nunca editar una migración ya aplicada.
+- Nunca editar una migración ya aplicada. Los catálogos del PDF se siembran en migraciones; un cambio de mecánica es una migración nueva.
+- El runner toma `GET_LOCK('rp_migrations')` antes de aplicar nada.

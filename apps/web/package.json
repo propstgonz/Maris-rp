@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Fase 2 (ver docs/plan.md §2) — capa de vistas Astro SSR. NO tiene lógica de juego ni acceso a la BD: renderiza y hace fetch() server-side contra la API de mapServer.js, que sigue siendo la única fuente de verdad (ver src/middleware.ts).",
+  "description": "Panel de Staff en Astro SSR. No tiene lógica de juego ni acceso a la BD: renderiza y hace fetch() server-side contra la API (src/apiServer.js), que es la única fuente de verdad (ver src/middleware.ts).",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
