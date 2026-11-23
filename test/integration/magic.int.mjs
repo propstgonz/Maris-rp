@@ -5,9 +5,12 @@ import { resetDatabase, createCharacter, ACTOR } from './helpers.mjs';
 const dice = { roll: 10 };
 mock.module('../../src/utils/dice.js', { namedExports: { rollDie: () => dice.roll } });
 
-let db, T, svc;
+let db, T, svc, UserFacingError;
 before(async () => {
   ({ db, T } = await resetDatabase());
+  await db.execute(`UPDATE ${T.mastery_levels} SET requires_mentor = 1 WHERE \`rank\` = 1`);
+  await db.execute(`UPDATE ${T.mastery_levels} SET threshold = 20.5 WHERE \`rank\` = 3`);
+  ({ UserFacingError } = await import('../../src/utils/errors.js'));
   svc = await import('../../src/services/magicService.js');
 });
 after(async () => { await db.closePool(); });
@@ -32,7 +35,8 @@ const attempts = async pid => Number((await db.queryOne(
 const expire = (pid, slug) => db.execute(
   `UPDATE ${T.school_progress} SET retry_after = NOW() - INTERVAL 1 DAY
    WHERE player_id = ? AND school_id = (SELECT id FROM ${T.schools} WHERE slug = ?)`, [pid, slug]);
-const roll = (pid, slug, extra = {}) => svc.authorizedRoll({ playerId: pid, schoolSlug: slug, actor: ACTOR, ...extra });
+const roll = (pid, slug, extra = {}) => svc.authorizedRoll({ playerId: pid, schoolSlug: slug, mentorLabel: 'NPC', actor: ACTOR, ...extra });
+const userFacing = error => error instanceof UserFacingError;
 
 test('catalogo: 6 escuelas, Encantamiento inactiva y sin conjuros; 21/15/11/14/14', async () => {
   assert.equal((await svc.listSchools({ includeInactive: true })).length, 6);
@@ -79,12 +83,16 @@ test('subida 0 a 5 con mentor NPC y mentor jugador', async () => {
   const mentor = await makePlayer();
   await svc.setLevel(mentor, 'alteracion', 5, ACTOR);
   dice.roll = 20;
+  await assert.rejects(roll(pid, 'alteracion', { mentorLabel: null }), /mentor/);
+  await assert.rejects(roll(pid, 'alteracion', { mentorPlayerId: pid }), /propio mentor/);
+  const weakMentor = await makePlayer();
+  await assert.rejects(roll(pid, 'alteracion', { mentorLabel: null, mentorPlayerId: weakMentor }), /nivel 1/);
   const r1 = await roll(pid, 'alteracion');
   assert.equal(r1.success, true);
   assert.equal(r1.targetRank, 1);
   assert.equal(r1.levelName, 'Principiante');
   assert.equal(await rank(pid, 'alteracion'), 1);
-  await assert.rejects(roll(pid, 'alteracion'), /mentor/);
+  await assert.rejects(roll(pid, 'alteracion', { mentorLabel: null }), /mentor/);
   assert.equal(await attempts(pid), 1);
   const r2 = await roll(pid, 'alteracion', { mentorLabel: 'Maestro NPC' });
   assert.equal(r2.targetRank, 2);
@@ -134,13 +142,13 @@ test('fallo fija retry_after a +28 dias y bloquea; al expirar se puede reintenta
   assert.equal((await db.queryOne(`SELECT retry_after FROM ${T.school_progress} WHERE player_id = ?`, [pid])).retry_after, null);
 });
 
-test('Habil: total 20 falla y total 21 pasa', async () => {
+test('Habil: total 20 falla y total 21 pasa (mas de 20)', async () => {
   const pid = await makePlayer({ stats: { autismo: 3, agilidad: 3 } });
   await svc.setLevel(pid, 'ilusion', 2, ACTOR);
   dice.roll = 14;
   const fail = await roll(pid, 'ilusion', { mentorLabel: 'NPC' });
   assert.equal(fail.total, 20);
-  assert.equal(fail.threshold, 21);
+  assert.equal(fail.threshold, 20.5);
   assert.equal(fail.success, false);
   await expire(pid, 'ilusion');
   dice.roll = 15;
@@ -148,6 +156,16 @@ test('Habil: total 20 falla y total 21 pasa', async () => {
   assert.equal(pass.total, 21);
   assert.equal(pass.success, true);
   assert.equal(await rank(pid, 'ilusion'), 3);
+});
+
+test('Habil en Destruccion con Autismo 3 y D20 16 suma 20,5 y pasa', async () => {
+  const pid = await makePlayer({ stats: { autismo: 3 } });
+  await svc.setLevel(pid, 'destruccion', 2, ACTOR);
+  dice.roll = 16;
+  const r = await roll(pid, 'destruccion');
+  assert.equal(r.total, 20.5);
+  assert.equal(r.success, true);
+  assert.equal(await rank(pid, 'destruccion'), 3);
 });
 
 test('Destruccion con Autismo 5 suma 7,5', async () => {
@@ -202,19 +220,23 @@ test('overview: niveles, siguiente, magia con menhir y escuelas inactivas', asyn
   assert.equal(ov.schools.length, 6);
   const ilusion = ov.schools.find(s => s.school.slug === 'ilusion');
   assert.equal(ilusion.levelName, 'Aprendiz');
-  assert.deepEqual(ilusion.next, { rank: 3, name: 'Hábil', threshold: 21 });
+  assert.deepEqual(ilusion.next, { rank: 3, name: 'Hábil', threshold: 20.5, requiresMentor: true });
+  assert.ok(ilusion.retryAfter === null);
   const enc = ov.schools.find(s => s.school.slug === 'encantamiento');
   assert.equal(enc.active, false);
   assert.equal(enc.next, null);
 });
 
-test('carrera: dos tiradas simultaneas a la misma escuela, solo una tira', async () => {
-  const pid = await makePlayer({ stats: { autismo: 6 } });
-  dice.roll = 20;
+test('carrera: dos tiradas simultaneas a la misma escuela, una tira y la otra recibe un error claro', async () => {
+  const pid = await makePlayer({ stats: { autismo: 0 } });
+  dice.roll = 1;
   const results = await Promise.allSettled([roll(pid, 'destruccion'), roll(pid, 'destruccion')]);
   assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  const rejected = results.filter(r => r.status === 'rejected');
+  assert.ok(rejected.every(r => userFacing(r.reason)), rejected.map(r => r.reason?.message).join('|'));
+  assert.match(rejected[0].reason.message, /<t:\d+:D>/);
   assert.equal(await attempts(pid), 1);
-  assert.equal(await rank(pid, 'destruccion'), 1);
+  assert.equal(await rank(pid, 'destruccion'), 0);
 });
 
 test('carrera: tres tiradas con fallo a la vez dejan un solo intento', async () => {
@@ -222,6 +244,7 @@ test('carrera: tres tiradas con fallo a la vez dejan un solo intento', async () 
   dice.roll = 1;
   const results = await Promise.allSettled([roll(pid, 'ilusion'), roll(pid, 'ilusion'), roll(pid, 'ilusion')]);
   assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.ok(results.filter(r => r.status === 'rejected').every(r => userFacing(r.reason)));
   assert.equal(await attempts(pid), 1);
 });
 
@@ -232,6 +255,7 @@ test('carrera: dos claimFreeSchool simultaneas, solo una', async () => {
     svc.claimFreeSchool(pid, 'conjuracion', ACTOR),
   ]);
   assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.ok(results.filter(r => r.status === 'rejected').every(r => userFacing(r.reason)));
   const total = Number((await db.queryOne(
     `SELECT COUNT(*) AS n FROM ${T.school_progress} WHERE player_id = ? AND level_rank >= 1`, [pid])).n);
   assert.equal(total, 1);
@@ -241,4 +265,47 @@ test('un personaje muerto no puede tirar ni reclamar', async () => {
   const pid = await makePlayer({ stats: { autismo: 6 }, alive: false });
   await assert.rejects(roll(pid, 'ilusion'), /muerto/);
   await assert.rejects(svc.claimFreeSchool(pid, 'ilusion', ACTOR), /muerto/);
+});
+
+test('carrera repetida: dos Rolepriest sobre una escuela nueva nunca dan error interno', async () => {
+  for (let i = 0; i < 10; i++) {
+    const pid = await makePlayer({ stats: { autismo: 0 } });
+    dice.roll = 1;
+    const results = await Promise.allSettled([roll(pid, 'alteracion'), roll(pid, 'alteracion')]);
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+    assert.ok(results.filter(r => r.status === 'rejected').every(r => userFacing(r.reason)),
+      results.map(r => r.reason?.message).join('|'));
+  }
+});
+
+test('setLevel rechaza escuelas inactivas y conserva el enfriamiento si el nivel no cambia', async () => {
+  const pid = await makePlayer({ stats: { autismo: 0 } });
+  await assert.rejects(svc.setLevel(pid, 'encantamiento', 1, ACTOR), /excluida/);
+  dice.roll = 1;
+  await roll(pid, 'conjuracion');
+  const cooldown = () => db.queryOne(`SELECT retry_after FROM ${T.school_progress} WHERE player_id = ?`, [pid]);
+  assert.ok((await cooldown()).retry_after);
+  await svc.setLevel(pid, 'conjuracion', 0, ACTOR);
+  assert.ok((await cooldown()).retry_after);
+  const res = await svc.setLevel(pid, 'conjuracion', 2, ACTOR);
+  assert.equal(res.levelName, 'Aprendiz');
+  assert.equal((await cooldown()).retry_after, null);
+});
+
+test('escuela gratuita sin raza asignada (jugador heredado) se puede reclamar', async () => {
+  const pid = await makePlayer({ stats: { autismo: 6 } });
+  await db.execute(`UPDATE ${T.players} SET race_id = NULL WHERE id = ?`, [pid]);
+  assert.equal((await svc.getSchoolsOverview(pid)).canClaimFreeSchool, true);
+  await svc.claimFreeSchool(pid, 'ilusion', ACTOR);
+  assert.equal(await rank(pid, 'ilusion'), 1);
+});
+
+test('tope de Magia: Aprendiz no rebasa el de la raza y conjuros avisa del Menhir Ritual', async () => {
+  const human = await makePlayer({ stats: { autismo: 6 }, race: 'nordico', menhir: 'aprendiz' });
+  assert.equal((await svc.getSchoolsOverview(human)).magic.magia, 150);
+  const aldmer = await makePlayer({ stats: { autismo: 6 }, race: 'aldmer', menhir: 'aprendiz' });
+  assert.equal((await svc.getSchoolsOverview(aldmer)).magic.magia, 200);
+  const ritual = await makePlayer({ stats: { autismo: 2 }, menhir: 'ritual' });
+  assert.equal((await svc.getUnlockedSpells(ritual, { schoolSlug: 'destruccion' })).magicToLife, true);
+  assert.equal((await svc.getUnlockedSpells(aldmer, { schoolSlug: 'destruccion' })).schoolName, 'Destrucción');
 });

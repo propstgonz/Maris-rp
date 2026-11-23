@@ -3,6 +3,7 @@ import { STATS, STAT_LABELS } from '../domain/picarda.js';
 import { genderLabel } from './text.js';
 import { getAvatarUrl } from './playerAvatar.js';
 import { componentEmoji } from './emoji.js';
+import { thresholdLabel } from '../domain/magic.js';
 
 export const COLORS = {
   GREEN:  0x2ecc71,
@@ -24,23 +25,12 @@ export function discordRelativeFromNow(secondsRemaining) {
   return discordTimestamp(new Date(Date.now() + Math.max(0, secondsRemaining) * 1000), 'R');
 }
 
-export function formatExpiry(isoString) {
-  if (!isoString) return 'permanente';
-  return `${discordTimestamp(isoString, 'f')} (${discordTimestamp(isoString, 'R')})`;
-}
-
 export function formatDate(isoString) {
   return discordTimestamp(isoString, 'd');
 }
 
 export function signed(n) {
   return (n >= 0 ? '+' : '') + n;
-}
-
-export function buildErrorEmbed(message) {
-  return new EmbedBuilder()
-    .setColor(COLORS.RED)
-    .setDescription(`❌ ${message}`);
 }
 
 export function buildSuccessEmbed(title, description = '') {
@@ -85,11 +75,12 @@ export function pageFooter(page, pages, total, noun) {
   return `Página ${page}/${pages} · ${total} ${noun}`;
 }
 
-function listEmbed(title, color, lines, empty, footer) {
+function listEmbed(title, color, lines, empty, footer, notice = null) {
+  const body = lines.length ? lines.join('\n') : empty;
   return new EmbedBuilder()
     .setColor(color)
     .setTitle(clip(title, 256))
-    .setDescription(clip(lines.length ? lines.join('\n') : empty, DESCRIPTION_MAX))
+    .setDescription(clip(notice ? `${notice}\n\n${body}` : body, DESCRIPTION_MAX))
     .setFooter({ text: footer });
 }
 
@@ -115,9 +106,10 @@ export function buildProfileEmbed(profile) {
 
   const civilText = civil.spouse ? `${civil.label} · con <@${civil.spouse.discordId}>` : civil.label;
 
+  const fallecido = player.is_alive ? '' : ' · Fallecido';
   const embed = new EmbedBuilder()
     .setColor(COLORS.PURPLE)
-    .setTitle(clip(`${E.perfil} ${player.character_name}`, 256))
+    .setTitle(clip(`${E.perfil} ${player.character_name}${fallecido}`, 256))
     .setDescription(
       `**Género:** ${genderLabel(player.gender)} · **Edad:** ${player.age ?? '—'}\n` +
       `**Creado:** ${discordTimestamp(player.character_created_at, 'D')}`
@@ -174,12 +166,12 @@ function schoolLine(row, now) {
   if (!row.active) return 'Excluida hasta nuevo aviso';
   const lines = [row.rank > 0 ? `Nivel ${row.rank} · ${row.levelName}` : 'Sin iniciar'];
   if (row.next) {
-    const mentor = row.next.rank >= 2 ? ' · requiere mentor' : '';
-    lines.push(`Siguiente: ${row.next.name} — ${schoolFormula(row.school)} ≥ ${formatNumber(row.next.threshold)}${mentor}`);
+    const mentor = row.next.requiresMentor ? ' · requiere mentor' : '';
+    lines.push(`Siguiente: ${row.next.name} — ${schoolFormula(row.school)}: ${thresholdLabel(row.next.threshold)}${mentor}`);
   } else {
     lines.push('Nivel máximo alcanzado');
   }
-  if (row.retryAfter && new Date(row.retryAfter) > now) {
+  if (row.retryAfter && row.retryAfter > now) {
     lines.push(`Puede reintentar el ${discordTimestamp(row.retryAfter, 'D')}`);
   }
   return lines.join('\n');
@@ -188,7 +180,7 @@ function schoolLine(row, now) {
 export function buildSchoolsEmbed(overview, now = new Date()) {
   const { magia, vidaExtra } = overview.magic;
   const magicText = vidaExtra > 0
-    ? `Magia total: **${formatNumber(magia)}** · **+${formatNumber(vidaExtra)} de Vida**`
+    ? `Tu Magia se convierte en Vida por el Menhir Ritual: **+${formatNumber(vidaExtra)} de Vida**`
     : `Magia total: **${formatNumber(magia)}**`;
   const embed = new EmbedBuilder()
     .setColor(COLORS.BLUE)
@@ -202,7 +194,7 @@ export function buildSchoolsEmbed(overview, now = new Date()) {
   return embed;
 }
 
-export function buildSpellsEmbed({ rows, total, page, pages, locked = false, schoolName = null }) {
+export function buildSpellsEmbed({ rows, total, page, pages, locked = false, schoolName = null, magicToLife = false }) {
   const lines = [];
   let heading = null;
   for (const spell of rows) {
@@ -216,5 +208,6 @@ export function buildSpellsEmbed({ rows, total, page, pages, locked = false, sch
   }
   const title = locked ? `${E.conjuros} Conjuros bloqueados (nivel siguiente)` : `${E.conjuros} Conjuros${schoolName ? ` · ${schoolName}` : ''}`;
   const empty = locked ? 'No hay conjuros en el nivel siguiente.' : 'Todavía no tienes conjuros desbloqueados.';
-  return listEmbed(title, COLORS.PURPLE, lines, empty, pageFooter(page, pages, total, 'conjuros'));
+  const notice = magicToLife ? 'Tu Magia se convierte en Vida por el Menhir Ritual: los conjuros con coste en Magia no se pueden pagar.' : null;
+  return listEmbed(title, COLORS.PURPLE, lines, empty, pageFooter(page, pages, total, 'conjuros'), notice);
 }

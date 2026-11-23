@@ -13,6 +13,7 @@ export const STAT_LABELS = {
 export const BASE_POINTS = 8;
 export const MAX_BASE_PER_STAT = 6;
 export const MAGIC_PER_AUTISMO = 25;
+export const MAGIC_BASE_CAP = 150;
 export const MENHIR_CHANGE_MONTHS = 6;
 
 export function isStat(stat) {
@@ -46,8 +47,9 @@ export function freePoints(playerRow) {
   return BASE_POINTS + Number(playerRow?.stat_bonus_points ?? 0) - spentPoints(playerRow);
 }
 
-export function magicPoints(effective, menhirRow) {
-  const magia = MAGIC_PER_AUTISMO * Math.max(0, effective.autismo) + Number(menhirRow?.magic_bonus ?? 0);
+export function magicPoints(effective, menhirRow, raceRow) {
+  const cap = MAGIC_BASE_CAP + MAGIC_PER_AUTISMO * Math.max(0, Number(raceRow?.mod_autismo ?? 0));
+  const magia = Math.min(MAGIC_PER_AUTISMO * Math.max(0, effective.autismo), cap) + Number(menhirRow?.magic_bonus ?? 0);
   if (Number(menhirRow?.magic_to_life ?? 0) === 1) return { magia: 0, vidaExtra: magia / 100 };
   return { magia, vidaExtra: 0 };
 }

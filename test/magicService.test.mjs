@@ -9,7 +9,7 @@ const fakeDb = {
 const named = makeFakeNamedExports(fakeDb);
 
 const school = { id: 2, slug: 'alteracion', name: 'Alteración', secondary_stat: 'intuicion', secondary_divisor: 1, is_active: 1 };
-const levels = [1, 2, 3, 4, 5].map((rank, i) => ({ rank, name: `N${rank}`, threshold: [19, 19, 21, 24, 28][i] }));
+const levels = [1, 2, 3, 4, 5].map((rank, i) => ({ rank, name: `N${rank}`, threshold: [19, 19, 20.5, 24, 28][i], requires_mentor: 1 }));
 
 async function queryOne(sql) {
   if (sql.includes('FROM rp_players.schools WHERE slug')) return school;
@@ -44,7 +44,7 @@ const { authorizedRoll, getUnlockedSpells } = await import('../src/services/magi
 const actor = { discordId: '9', username: 'rp', source: 'discord' };
 
 test('tirada de entrada con éxito: 15 + 2 + 3 >= 19', async () => {
-  const r = await authorizedRoll({ playerId: 1, schoolSlug: 'alteracion', actor });
+  const r = await authorizedRoll({ playerId: 1, schoolSlug: 'alteracion', mentorLabel: 'NPC', actor });
   assert.equal(r.success, true);
   assert.equal(r.modifier, 5);
   assert.equal(r.total, 20);
@@ -68,7 +68,7 @@ test('mentor jugador de nivel insuficiente se rechaza', async () => {
 
 test('claim sin filas explica el enfriamiento', async () => {
   state.claimChanges = 0;
-  state.progress = { level_rank: 0, retry_after: new Date(Date.now() + 86400000) };
+  state.progress = { level_rank: 0, retry_after: new Date(Date.now() + 86400000).toISOString().slice(0, 19).replace('T', ' ') };
   await assert.rejects(authorizedRoll({ playerId: 1, schoolSlug: 'alteracion', actor }), /hasta el/);
 });
 
