@@ -1,133 +1,121 @@
-name: rpdiscbot
+name: maris
 
 services:
 
-  rpbot-bd:
+  maris-rpbot-bd:
     image: mysql:8
-    container_name: ricardana-rp-mysql
+    container_name: maris-rp-mysql
     restart: unless-stopped
-    # mysql_native_password viene deshabilitado por defecto desde MySQL 8.4 —
-    # hace falta activo para que mysqldump (mariadb-dump en la imagen del
-    # bot) pueda autenticarse; ver mysql-init/create-app-user.sh y
-    # backupService.js#runMysqldump.
     command: ["--mysql-native-password=ON"]
     env_file: .env
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "3307:3306"
+      - "3308:3306"
     volumes:
-      - /media/raid/database/rpbot/mysql:/var/lib/mysql
+      - /media/raid/database/maris/mysql:/var/lib/mysql
       - ${HOST_PROJECT_DIR:-.}/mysql-init:/docker-entrypoint-initdb.d:ro
     networks:
-      - ricardana-rp-bot-net
+      - maris-rp-bot-net
 
-  rp-disc-bot:
+  maris-rp-disc-bot:
     build:
       context: .
       dockerfile: Dockerfile
-    image: rpdiscbot:latest
-    container_name: ricardana-rp-bot
+    image: maris-bot:latest
+    container_name: maris-rp-bot
     restart: unless-stopped
     depends_on:
-      - nginx
-      - rpbot-bd
+      - maris-nginx
+      - maris-rpbot-bd
     env_file: .env
     environment:
-      DB_HOST: rpbot-bd
+      DB_HOST: maris-rpbot-bd
       DB_PORT: 3306
     volumes:
-      - /media/raid/database/rpbot:/app/data
+      - /media/raid/database/maris:/app/data
       - ${HOST_PROJECT_DIR:-.}/config.json:/app/config.json:ro
-      - /media/raid/bucket/rpdiscbot/avatars:/app/avatars
-      # De solo lectura y aparte de los mounts sueltos de arriba: el backup
-      # (backupService.js) necesita ver el árbol ENTERO del bucket, no solo
-      # las subcarpetas que este proceso usa en caliente.
-      - /media/raid/bucket/rpdiscbot:/app/bucket:ro
+      - /media/raid/bucket/maris/avatars:/app/avatars
+      - /media/raid/bucket/maris:/app/bucket:ro
     networks:
-      - ricardana-rp-bot-net
+      - maris-rp-bot-net
 
-  rp-api:
+  maris-rp-api:
     build:
       context: .
       dockerfile: Dockerfile
-    image: rpdiscbot:latest
+    image: maris-bot:latest
     command: ["node", "src/apiServer.js"]
-    container_name: ricardana-rp-api
+    container_name: maris-rp-api
     restart: unless-stopped
     depends_on:
-      - rpbot-bd
+      - maris-rpbot-bd
     env_file: .env
     environment:
-      DB_HOST: rpbot-bd
+      DB_HOST: maris-rpbot-bd
       DB_PORT: 3306
       API_PORT: 3000
     volumes:
-      - /media/raid/database/rpbot:/app/data
+      - /media/raid/database/maris:/app/data
       - ${HOST_PROJECT_DIR:-.}/config.json:/app/config.json:ro
-      - /media/raid/bucket/rpdiscbot/avatars:/app/avatars
-      # Ver el mismo mount en rp-disc-bot — el botón "generar ahora" de la
-      # web llama a runBackup() directamente desde este proceso.
-      - /media/raid/bucket/rpdiscbot:/app/bucket:ro
+      - /media/raid/bucket/maris/avatars:/app/avatars
+      - /media/raid/bucket/maris:/app/bucket:ro
     networks:
       - traefik-net
-      - ricardana-rp-bot-net
+      - maris-rp-bot-net
     labels:
       - "traefik.enable=true"
-      # Este servicio está en DOS redes (traefik-net y ricardana-rp-bot-net).
-      # Sin este label, Traefik elige una IP entre las dos sin ningún criterio
-      # fijo — cuando le tocó la de ricardana-rp-bot-net (donde Traefik no
-      # tiene ninguna interfaz), toda petición a /auth y /api se quedaba
-      # colgada sin llegar a ningún sitio, sin dar ni siquiera un error.
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.roleplay-api.rule=Host(`rp-map.baronette.es`) && (PathPrefix(`/auth`) || PathPrefix(`/api`) || PathPrefix(`/static`))"
-      - "traefik.http.routers.roleplay-api.entrypoints=websecure"
-      - "traefik.http.routers.roleplay-api.tls=true"
-      - "traefik.http.routers.roleplay-api.priority=100"
-      - "traefik.http.services.roleplay-api.loadbalancer.server.port=3000"
+      - "traefik.http.routers.maris-api.rule=Host(`${PANEL_HOST:?Falta PANEL_HOST en .env}`) && (PathPrefix(`/auth`) || PathPrefix(`/api`) || PathPrefix(`/static`))"
+      - "traefik.http.routers.maris-api.entrypoints=websecure"
+      - "traefik.http.routers.maris-api.tls=true"
+      - "traefik.http.routers.maris-api.priority=100"
+      - "traefik.http.services.maris-api.loadbalancer.server.port=3000"
 
-  rp-web:
+  maris-rp-web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-    image: rpdiscbot-web:latest
-    container_name: ricardana-rp-web
+    image: maris-web:latest
+    container_name: maris-rp-web
     restart: unless-stopped
     depends_on:
-      - rp-api
+      - maris-rp-api
     environment:
-      API_INTERNAL_URL: http://rp-api:3000
+      API_INTERNAL_URL: http://maris-rp-api:3000
       HOST: 0.0.0.0
       PORT: 4321
     networks:
       - traefik-net
+      - maris-rp-bot-net
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.roleplay-web.rule=Host(`rp-map.baronette.es`)"
-      - "traefik.http.routers.roleplay-web.entrypoints=websecure"
-      - "traefik.http.routers.roleplay-web.tls=true"
-      - "traefik.http.routers.roleplay-web.priority=1"
-      - "traefik.http.services.roleplay-web.loadbalancer.server.port=4321"
+      - "traefik.http.routers.maris-web.rule=Host(`${PANEL_HOST:?Falta PANEL_HOST en .env}`)"
+      - "traefik.http.routers.maris-web.entrypoints=websecure"
+      - "traefik.http.routers.maris-web.tls=true"
+      - "traefik.http.routers.maris-web.priority=1"
+      - "traefik.http.services.maris-web.loadbalancer.server.port=4321"
 
-  nginx:
+  maris-nginx:
     image: nginx:1.25-alpine
-    container_name: ricardana-rp-bucket
+    container_name: maris-rp-bucket
     restart: unless-stopped
     volumes:
       - ${HOST_PROJECT_DIR:-.}/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /media/raid/bucket/rpdiscbot:/usr/share/nginx/html:ro
+      - /media/raid/bucket/maris:/usr/share/nginx/html:ro
     networks:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.roleplay-bucket.rule=Host(`rp-bucket.baronette.es`)"
-      - "traefik.http.routers.roleplay-bucket.entrypoints=websecure"
-      - "traefik.http.routers.roleplay-bucket.tls=true"
-      - "traefik.http.services.roleplay-bucket.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.maris-bucket.rule=Host(`${BUCKET_HOST:?Falta BUCKET_HOST en .env}`)"
+      - "traefik.http.routers.maris-bucket.entrypoints=websecure"
+      - "traefik.http.routers.maris-bucket.tls=true"
+      - "traefik.http.services.maris-bucket.loadbalancer.server.port=80"
 
 networks:
-  ricardana-rp-bot-net:
+  maris-rp-bot-net:
     driver: bridge
   traefik-net:
     external: true

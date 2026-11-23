@@ -45,11 +45,11 @@ El mecanismo es el mismo que las copias de seguridad automáticas ([BACKUPS.md](
 
 1. **Genera un backup fresco** en el servidor origen: desde el panel (Backups > "Generar ahora") o con `POST /api/backups/run` autenticado. Produce un `roleplay-<timestamp>.zip` en `data/backups/` (o `BACKUP_DIR`) con `database.sql` (los cuatro schemas) y `bucket/` (avatares).
 2. **Copia ese fichero** al servidor nuevo.
-3. **Prepara el servidor nuevo** siguiendo [deploy.md](deploy.md) hasta el paso 3 (red de Traefik creada, `.env` y `config.json` rellenos), pero **todavía no** arranques `rpbot-bd` con datos.
+3. **Prepara el servidor nuevo** siguiendo [deploy.md](deploy.md) hasta el paso 3 (red de Traefik creada, `.env` y `config.json` rellenos), pero **todavía no** arranques `maris-rpbot-bd` con datos.
 4. **Restaura** la copia: [BACKUPS.md, Restaurar](../BACKUPS.md#restaurar-un-backup). En resumen: `unzip`, `mysql < database.sql` y copiar `bucket/` sobre su punto de montaje.
 5. Arranca el resto (`docker compose up -d --build`) y verifica el login y `/staff` como en [deploy.md, Verificar](deploy.md#5-verificar-que-funciona).
 
-Si el servidor origen sigue vivo, páralo antes del paso 1 (`docker compose stop rp-disc-bot rp-api`) para que el backup capture un estado consistente. `mysqldump --single-transaction` (el que usa `backupService.js`) ya hace innecesario parar para la parte de MySQL, pero el bucket de imágenes no tiene ese lujo si algo escribe un avatar justo mientras se empaqueta.
+Si el servidor origen sigue vivo, páralo antes del paso 1 (`docker compose stop maris-rp-disc-bot maris-rp-api`) para que el backup capture un estado consistente. `mysqldump --single-transaction` (el que usa `backupService.js`) ya hace innecesario parar para la parte de MySQL, pero el bucket de imágenes no tiene ese lujo si algo escribe un avatar justo mientras se empaqueta.
 
 ## 3. Restaurar sin migrar de servidor
 

@@ -14,7 +14,7 @@ Tres procesos que solo comparten MySQL:
 | API | `src/apiServer.js` (`src/api/`) | Login con Discord OAuth2, endpoints del panel de staff, SSE `/api/events` |
 | Web | `apps/web/` (Astro SSR) | Panel de staff; solo habla con la API por `fetch()` server-side |
 
-En Docker el bot y la API comparten imagen (`Dockerfile` de la raíz) y la web tiene la suya (`apps/web/Dockerfile`). Un contenedor `nginx` sirve el bucket de imágenes (avatares) y `rpbot-bd` es la MySQL.
+En Docker el bot y la API comparten imagen (`Dockerfile` de la raíz) y la web tiene la suya (`apps/web/Dockerfile`). Un contenedor `maris-nginx` sirve el bucket de imágenes (avatares) y `maris-rpbot-bd` es la MySQL.
 
 MySQL va en cuatro schemas por dominio (`rp_players`, `rp_world`, `rp_economy`, `rp_ops`); las migraciones se aplican solas al arrancar. Detalle en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
@@ -49,7 +49,7 @@ Copia `.env.example` a `.env` (no se sube a Git). Todas las variables:
 | `CLIENT_ID` | sí | Application ID; también es el Client ID del OAuth2 de la API |
 | `GUILD_ID` | sí para la API | ID del servidor. La API lo usa para comprobar el rol de Rolepriest y sin él no arranca. Con él los comandos se registran solo en ese servidor (instantáneo); sin él, globales (hasta 1 h) |
 | `AUTO_DEPLOY_COMMANDS` | no | `false` desactiva el registro automático de comandos al arrancar el bot |
-| `DB_HOST`, `DB_PORT` | sí fuera de Docker | Host y puerto de MySQL. Con `docker-compose.yml` los fija el compose (`rpbot-bd:3306`) |
+| `DB_HOST`, `DB_PORT` | sí fuera de Docker | Host y puerto de MySQL. Con `docker-compose.yml` los fija el compose (`maris-rpbot-bd:3306`) |
 | `DB_USER` | sí | Usuario de aplicación. Usa `propst` (lo crea `mysql-init/create-app-user.sh`), no `root`: `mysqldump` de los backups falla con `root` |
 | `DB_PASSWORD` | sí | Contraseña única: es la de root de MySQL en el compose y la de `propst` |
 | `NGINX_BASE_URL` | sí | URL pública del bucket de imágenes (avatares). Nunca `localhost` ni un hostname interno de Docker; si está mal, el bot omite las miniaturas |
@@ -65,7 +65,7 @@ Copia `.env.example` a `.env` (no se sube a Git). Todas las variables:
 | `API_PUBLIC_URL` | sí para la API | URL pública del panel, sin barra final (por ejemplo `https://rp-map.tudominio.com`) |
 | `API_SESSION_SECRET` | sí para la API | Cadena larga y aleatoria que firma la cookie de sesión (`openssl rand -hex 32`). Cambiarla cierra todas las sesiones |
 
-La API también lee `API_PORT` (por defecto 3000, lo fija el compose) y `BUCKET_DIR` (por defecto `/app/bucket`). La web usa `API_INTERNAL_URL` (la URL interna de la API; en el compose es `http://rp-api:3000`).
+La API también lee `API_PORT` (por defecto 3000, lo fija el compose) y `BUCKET_DIR` (por defecto `/app/bucket`). La web usa `API_INTERNAL_URL` (la URL interna de la API; en el compose es `http://maris-rp-api:3000`).
 
 ### `config.json`
 
@@ -106,11 +106,11 @@ docker network create traefik-net          # una vez, si no existe
 docker compose up -d --build
 ```
 
-Levanta cinco servicios: `rpbot-bd` (MySQL 8), `rp-disc-bot`, `rp-api`, `rp-web` y `nginx`. Para producción (dominio, Traefik, puntos de montaje) sigue [docs/deploy.md](docs/deploy.md).
+Levanta cinco servicios: `maris-rpbot-bd` (MySQL 8), `maris-rp-disc-bot`, `maris-rp-api`, `maris-rp-web` y `maris-nginx`. Para producción (dominio, Traefik, puntos de montaje) sigue [docs/deploy.md](docs/deploy.md).
 
 ### Catálogo opcional del Tomegrama
 
-`npm run seed:tomegrama` inserta (por nombre, de forma idempotente) los bienes y edificios que nombra el PDF: Parque, Hotel, Alcantarillado, Academia, Laboratorio, Caña de Pescar y los demás. No se ejecuta solo, para no duplicar un catálogo ya trabajado a mano. En el servidor: `docker compose exec rp-disc-bot npm run seed:tomegrama`.
+`npm run seed:tomegrama` inserta (por nombre, de forma idempotente) los bienes y edificios que nombra el PDF: Parque, Hotel, Alcantarillado, Academia, Laboratorio, Caña de Pescar y los demás. No se ejecuta solo, para no duplicar un catálogo ya trabajado a mano. En el servidor: `docker compose exec maris-rp-disc-bot npm run seed:tomegrama`.
 
 ## Tests
 
@@ -130,7 +130,7 @@ DB_HOST=127.0.0.1 DB_PORT=3399 DB_USER=root DB_PASSWORD=testpw npm test
 DB_HOST=127.0.0.1 DB_PORT=3399 DB_USER=root DB_PASSWORD=testpw npm run test:integration
 ```
 
-`test:integration` **borra los cuatro schemas** al empezar y se niega a correr contra los puertos 3306 y 3307 (salvo `INTEGRATION_ALLOW_ANY_PORT=1`). Por defecto usa `127.0.0.1:3399`, `root` y `testpw`. `npm test` no la incluye a propósito: es lo que se ejecuta en máquinas donde solo hay una MySQL de desarrollo.
+`test:integration` **borra los cuatro schemas** al empezar y se niega a correr contra los puertos 3306, 3307 y 3308 (salvo `INTEGRATION_ALLOW_ANY_PORT=1`). Por defecto usa `127.0.0.1:3399`, `root` y `testpw`. `npm test` no la incluye a propósito: es lo que se ejecuta en máquinas donde solo hay una MySQL de desarrollo.
 
 ### Ensayo de migración
 

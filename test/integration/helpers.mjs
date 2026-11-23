@@ -1,7 +1,7 @@
 import { createConnection } from 'mysql2/promise';
 
 const SCHEMAS = ['rp_players', 'rp_world', 'rp_economy', 'rp_ops'];
-const PRODUCTION_PORTS = new Set(['3306', '3307']);
+const PRODUCTION_PORTS = new Set(['3306', '3307', '3308']);
 
 export const ACTOR = { discordId: '900000000000000001', username: 'rolepriest-test', source: 'discord' };
 

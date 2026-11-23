@@ -18,7 +18,7 @@ roleplay-<timestamp>.zip
   `rp_economy`, `rp_ops`). Se escribe a un directorio temporal dentro de
   `BACKUP_DIR` y se borra en cuanto entra en el zip, pase lo que pase.
 - `bucket/` — todo `/app/bucket` (montaje read-only de
-  `/media/raid/bucket/rpdiscbot` completo, ver `docker-compose.yml`). Si ese
+  `/media/raid/bucket/maris` completo, ver `docker-compose.yml`). Si ese
   montaje no existe en tu entorno (por ejemplo, en local sin bucket
   configurado), o si falla al empaquetarse, la copia se genera igual con
   solo la base de datos y queda avisado en el log.
@@ -76,7 +76,7 @@ Necesitas un solo fichero: el `.zip` de la copia.
 **1. Para el bot y el panel** (evita escrituras a mitad de restauración):
 
 ```bash
-docker compose stop rp-disc-bot rp-api
+docker compose stop maris-rp-disc-bot maris-rp-api
 ```
 
 **2. Descomprime la copia**:
@@ -92,7 +92,7 @@ Quedan `restauracion/database.sql` y `restauracion/bucket/`.
 contenido de los cuatro schemas sin que tengas que vaciarlos a mano primero:
 
 ```bash
-docker exec -i ricardana-rp-mysql mysql -u root -p"tu_DB_PASSWORD_del_.env" \
+docker exec -i maris-rp-mysql mysql -u root -p"tu_DB_PASSWORD_del_.env" \
   < restauracion/database.sql
 ```
 
@@ -100,13 +100,13 @@ docker exec -i ricardana-rp-mysql mysql -u root -p"tu_DB_PASSWORD_del_.env" \
 al destino:
 
 ```bash
-cp -a restauracion/bucket/. /media/raid/bucket/rpdiscbot/
+cp -a restauracion/bucket/. /media/raid/bucket/maris/
 ```
 
 **5. Vuelve a arrancar**:
 
 ```bash
-docker compose up -d rp-disc-bot rp-api
+docker compose up -d maris-rp-disc-bot maris-rp-api
 ```
 
 Por seguridad, antes del paso 2 puedes guardar aparte el estado actual con
@@ -115,10 +115,10 @@ restaurar" también queda como un backup normal, sin pasos especiales.
 
 ## Antes de desplegar el rediseño
 
-El backup automático corre al arrancar el bot, o sea **después** de aplicar las migraciones, y la migración 039 borra las tablas del juego antiguo. Para ese despliegue hace falta un volcado hecho **antes** con el sistema antiguo en marcha, y es lo único que permite volver atrás (el rollback de imagen no devuelve los datos). El procedimiento está en [docs/deploy.md](docs/deploy.md#despliegue-del-rediseño). El `Jenkinsfile` además guarda un volcado comprimido en `/media/raid/database/rpbot/pre-deploy/` antes de cada despliegue y conserva los 5 últimos; se restaura igual que `database.sql` pero con `gunzip`:
+El backup automático corre al arrancar el bot, o sea **después** de aplicar las migraciones, y la migración 039 borra las tablas del juego antiguo. Para ese despliegue hace falta un volcado hecho **antes** con el sistema antiguo en marcha, y es lo único que permite volver atrás (el rollback de imagen no devuelve los datos). El procedimiento está en [docs/deploy.md](docs/deploy.md#despliegue-del-rediseño). El `Jenkinsfile` además guarda un volcado comprimido en `/media/raid/database/maris/pre-deploy/` antes de cada despliegue y conserva los 5 últimos; se restaura igual que `database.sql` pero con `gunzip`:
 
 ```bash
-gunzip -c pre-deploy-<fecha>.sql.gz | docker exec -i ricardana-rp-mysql mysql -u root -p"tu_DB_PASSWORD_del_.env"
+gunzip -c pre-deploy-<fecha>.sql.gz | docker exec -i maris-rp-mysql mysql -u root -p"tu_DB_PASSWORD_del_.env"
 ```
 
 ## Blindaje adicional: copia fuera del servidor

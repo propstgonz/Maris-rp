@@ -19,7 +19,7 @@ def attemptRollback() {
     if [ -n "$missing" ]; then
       echo "No :rollback tag available for: ${missing} — looks like the first deploy on this host for it. Puede seguir caído, hace falta intervención manual."
     fi
-    echo "AVISO: si la migración 039 ya se aplicó, la imagen anterior no sirve con la base actual: restaura el volcado de /media/raid/database/rpbot/pre-deploy o el último backup."
+    echo "AVISO: si la migración 039 ya se aplicó, la imagen anterior no sirve con la base actual: restaura el volcado de /media/raid/database/maris/pre-deploy o el último backup."
   ''')
   if (status != 0) {
     echo 'El propio rollback ha fallado — hace falta intervención manual en el host.'
@@ -50,9 +50,9 @@ pipeline {
   }
 
   environment {
-    IMAGE_NAME = 'rpdiscbot'
-    WEB_IMAGE_NAME = 'rpdiscbot-web'
-    COMPOSE_PROJECT_NAME = 'rpdiscbot'
+    IMAGE_NAME = 'maris-bot'
+    WEB_IMAGE_NAME = 'maris-web'
+    COMPOSE_PROJECT_NAME = 'maris'
   }
 
   stages {
@@ -79,40 +79,15 @@ pipeline {
           test -f nginx/nginx.conf || (echo "nginx/nginx.conf is missing in the workspace." && exit 1)
           docker compose config -q
 
-          # Comprobación DIRECTA de que el DAEMON de Docker (el del host)
-          # ve estos ficheros en HOST_PROJECT_DIR — la ruta YA traducida
-          # (ver stage Checkout) — no en $(pwd), que es la ruta tal como
-          # la ve Jenkins y que el demonio no puede resolver. Si esto
-          # falla, HOST_PROJECT_DIR está mal calculado (o el layout del
-          # contenedor de Jenkins ha cambiado) — mejor saberlo aquí, con
-          # un mensaje claro, que con el "not a directory" opaco de runc
-          # a mitad del Deploy.
           docker run --rm \
             -v "${HOST_PROJECT_DIR}/nginx/nginx.conf:/probe/nginx.conf:ro" \
             -v "${HOST_PROJECT_DIR}/config.json:/probe/config.json:ro" \
             alpine:3.19 sh -c 'test -f /probe/nginx.conf && test -f /probe/config.json' \
             || (echo "El demonio de Docker no ve estos ficheros en HOST_PROJECT_DIR (${HOST_PROJECT_DIR}) — revisa que esa sea de verdad la ruta del workspace vista desde el host (ver el cálculo de HOST_PROJECT_DIR en el stage Checkout del Jenkinsfile)." && exit 1)
 
-          # Directorios de datos persistentes montados por bind mount en
-          # docker-compose.yml (datos de MySQL + bucket de imágenes de
-          # avatars) — rutas absolutas del host,
-          # AJENAS al workspace de Jenkins, así que ni siquiera existen
-          # dentro del contenedor de Jenkins (no está montado /media/raid
-          # ahí) — un `mkdir -p` normal en este mismo shell no las crearía
-          # en el host, solo dentro del contenedor de Jenkins, sin efecto
-          # real. Se crean en su lugar a través de un contenedor efímero,
-          # que sí habla con el demonio del host — así, si faltan, las
-          # crea de verdad ahí; si ya existen, no hace nada.
-          #
-          # Los directorios van en UN SOLO contenedor (antes era uno
-          # por directorio): el trabajo real es instantáneo, lo que costaba
-          # era arrancar y tirar varios contenedores seguidos (~0,4s cada
-          # uno, medido). Se mantienen dos `docker run` separados en este
-          # stage —este y el de arriba— a propósito, para no perder el
-          # mensaje de error concreto de cada uno.
           docker run --rm \
-            -v /media/raid/database/rpbot:/probe/db \
-            -v /media/raid/bucket/rpdiscbot/avatars:/probe/avatars \
+            -v /media/raid/database/maris:/probe/db \
+            -v /media/raid/bucket/maris/avatars:/probe/avatars \
             alpine:3.19 true \
             || (echo "No se han podido preparar los directorios de datos persistentes en el host (/media/raid/...) — revisa que el disco esté montado y que el demonio de Docker pueda escribir ahí." && exit 1)
         '''
@@ -121,10 +96,6 @@ pipeline {
 
     stage('Snapshot previous image') {
       steps {
-        // Un solo `sh` con un bucle dentro, en vez de dos `docker image
-        // inspect` + dos `docker tag` como pasos independientes de Jenkins
-        // (hasta cuatro): el envoltorio de cada paso `sh` cuesta más que el
-        // propio `docker tag`, que es instantáneo (solo mueve un puntero).
         sh '''
           set -u
           for image in "${IMAGE_NAME}" "${WEB_IMAGE_NAME}"; do
@@ -154,8 +125,7 @@ pipeline {
                 args="${args} --pull"
                 echo "Refrescando imágenes base desde el registro."
               fi
-              # shellcheck disable=SC2086 -- `args` debe partirse en palabras
-              docker compose build ${args} rp-disc-bot rp-web
+              docker compose build ${args} maris-rp-disc-bot maris-rp-web
             '''
           }
         }
@@ -167,8 +137,8 @@ pipeline {
         sh '''
           set -u
 
-          TEST_NET="rpdiscbot-test-net-${BUILD_NUMBER:-manual}"
-          TEST_DB="rpdiscbot-test-db-${BUILD_NUMBER:-manual}"
+          TEST_NET="maris-test-net-${BUILD_NUMBER:-manual}"
+          TEST_DB="maris-test-db-${BUILD_NUMBER:-manual}"
           TEST_DB_PASSWORD="test-only-throwaway"
 
           cleanup() {
@@ -183,11 +153,6 @@ pipeline {
             -e MYSQL_ROOT_PASSWORD="${TEST_DB_PASSWORD}" \
             mysql:8 > /dev/null
 
-          # Durante su inicialización, el entrypoint de mysql:8 levanta un
-          # servidor temporal que escucha SOLO por socket unix (el log dice
-          # literalmente "port: 0"). Por eso el sondeo va por TCP: solo
-          # responde cuando el servidor DEFINITIVO está aceptando
-          # conexiones, que es justo la señal que hace falta.
           set +x
           deadline=$(( $(date +%s) + 90 ))
           until docker exec "${TEST_DB}" mysqladmin ping \
@@ -219,20 +184,20 @@ pipeline {
         sh '''
           set -u
 
-          for var in API_PUBLIC_URL API_SESSION_SECRET; do
+          for var in API_PUBLIC_URL API_SESSION_SECRET PANEL_HOST BUCKET_HOST; do
             grep -Eq "^${var}=.+" .env || (echo "Falta ${var} en el .env del servidor: la API no arrancaría." && exit 1)
           done
 
-          if docker ps -q -f "name=^/ricardana-rp-mysql$" | grep -q .; then
+          if docker ps -q -f "name=^/maris-rp-mysql$" | grep -q .; then
             stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GIT_SHA}"
-            docker exec ricardana-rp-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers --databases rp_players rp_world rp_economy rp_ops' \
-              | docker run --rm -i -v /media/raid/database/rpbot/pre-deploy:/out alpine:3.19 sh -c "
+            docker exec maris-rp-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers --databases rp_players rp_world rp_economy rp_ops' \
+              | docker run --rm -i -v /media/raid/database/maris/pre-deploy:/out alpine:3.19 sh -c "
                   gzip > /out/pre-deploy-${stamp}.sql.gz
                   test \\$(wc -c < /out/pre-deploy-${stamp}.sql.gz) -gt 1024
                   ls -1t /out/pre-deploy-*.sql.gz | tail -n +6 | xargs -r rm -f
                 " \
               || (echo "No se pudo hacer el volcado de seguridad previo al despliegue: se aborta antes de tocar nada." && exit 1)
-            echo "Volcado de seguridad guardado en /media/raid/database/rpbot/pre-deploy/pre-deploy-${stamp}.sql.gz"
+            echo "Volcado de seguridad guardado en /media/raid/database/maris/pre-deploy/pre-deploy-${stamp}.sql.gz"
           else
             echo "No hay contenedor de MySQL en marcha (primer despliegue en este host): no hay nada que volcar."
           fi
@@ -243,7 +208,7 @@ pipeline {
     stage('Reclaim container names') {
       steps {
         sh '''
-          for name in ricardana-rp-bot ricardana-rp-api ricardana-rp-web ricardana-rp-bucket; do
+          for name in maris-rp-bot maris-rp-api maris-rp-web maris-rp-bucket; do
             cid=$(docker ps -aq -f "name=^/${name}$")
             if [ -n "$cid" ]; then
               owner=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || echo "")
@@ -264,7 +229,7 @@ pipeline {
             sh 'docker compose up -d --remove-orphans'
           } catch (err) {
             echo "docker compose up failed outright: ${err}"
-            sh 'docker compose logs --tail=150 rp-disc-bot rp-api rp-web || true'
+            sh 'docker compose logs --tail=150 maris-rp-disc-bot maris-rp-api maris-rp-web || true'
             attemptRollback()
             error("Deploy command failed for ${env.GIT_SHA} — rolled back if a previous image was available.")
           }
@@ -276,11 +241,6 @@ pipeline {
       steps {
         script {
           def status = sh(returnStatus: true, script: '''
-            # +x: Jenkins ejecuta cada `sh` con `-xe`, y con la traza puesta
-            # este bucle escupiría decenas de líneas por vuelta. +e: aquí un
-            # comando que falla (el contenedor aún no responde) es un
-            # RESULTADO esperado que se inspecciona, no un error que deba
-            # abortar el script.
             set +x +e
 
             deadline=$(( $(date +%s) + 30 ))
@@ -288,9 +248,9 @@ pipeline {
 
             while :; do
               attempt=$(( attempt + 1 ))
-              bot_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-bot 2>/dev/null || echo false)
-              api_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-api 2>/dev/null || echo false)
-              web_up=$(docker inspect -f '{{.State.Running}}' ricardana-rp-web 2>/dev/null || echo false)
+              bot_up=$(docker inspect -f '{{.State.Running}}' maris-rp-bot 2>/dev/null || echo false)
+              api_up=$(docker inspect -f '{{.State.Running}}' maris-rp-api 2>/dev/null || echo false)
+              web_up=$(docker inspect -f '{{.State.Running}}' maris-rp-web 2>/dev/null || echo false)
 
               if [ "$bot_up" != "true" ] || [ "$api_up" != "true" ] || [ "$web_up" != "true" ]; then
                 echo "Intento ${attempt}: bot running=${bot_up}, api running=${api_up}, web running=${web_up}."
@@ -298,9 +258,9 @@ pipeline {
               fi
 
               bot_ready=false; api_ok=false; web_ok=false
-              if docker logs --tail=200 ricardana-rp-bot 2>&1 | grep -q 'Bot conectado como'; then bot_ready=true; fi
-              if docker exec ricardana-rp-api wget -S -O /dev/null -T 5 http://127.0.0.1:3000/api/me 2>&1 | grep -q 'HTTP/1.[01] 401'; then api_ok=true; fi
-              if docker exec ricardana-rp-web wget -q -O /dev/null -T 5 http://127.0.0.1:4321/ 2>/dev/null; then web_ok=true; fi
+              if docker logs --tail=200 maris-rp-bot 2>&1 | grep -q 'Bot conectado como'; then bot_ready=true; fi
+              if docker exec maris-rp-api wget -S -O /dev/null -T 5 http://127.0.0.1:3000/api/me 2>&1 | grep -q 'HTTP/1.[01] 401'; then api_ok=true; fi
+              if docker exec maris-rp-web wget -q -O /dev/null -T 5 http://127.0.0.1:4321/ 2>/dev/null; then web_ok=true; fi
 
               if [ "$bot_ready" = true ] && [ "$api_ok" = true ] && [ "$web_ok" = true ]; then
                 echo "Health check OK en el intento ${attempt}."
@@ -317,14 +277,14 @@ pipeline {
 
           if (status == 2) {
             echo 'Un contenedor se ha caído tras el deploy — intentando rollback automático.'
-            sh 'docker compose logs --tail=150 rp-disc-bot rp-api rp-web || true'
+            sh 'docker compose logs --tail=150 maris-rp-disc-bot maris-rp-api maris-rp-web || true'
             attemptRollback()
             error("Deploy de ${env.GIT_SHA} ha tumbado un contenedor tras arrancar — ver logs arriba.")
           }
 
           if (status == 3) {
-            echo "Contenedores en marcha pero no confirmados como listos en 30s — revisa 'docker compose logs rp-disc-bot rp-api rp-web' en el host. No se falla el build por esto."
-            sh 'docker compose logs --tail=80 rp-disc-bot rp-api rp-web || true'
+            echo "Contenedores en marcha pero no confirmados como listos en 30s — revisa 'docker compose logs maris-rp-disc-bot maris-rp-api maris-rp-web' en el host. No se falla el build por esto."
+            sh 'docker compose logs --tail=80 maris-rp-disc-bot maris-rp-api maris-rp-web || true'
           }
         }
       }
@@ -336,7 +296,7 @@ pipeline {
       sh 'docker image prune -f --filter "dangling=true" || true'
     }
     success {
-      echo "rpdiscbot desplegado (bot + api + web) — commit ${env.GIT_SHA}."
+      echo "maris desplegado (bot + api + web) — commit ${env.GIT_SHA}."
     }
     failure {
       echo 'Build failed, or the deploy crashed and was rolled back — see the failed stage above for details.'

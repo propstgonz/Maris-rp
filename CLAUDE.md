@@ -121,12 +121,12 @@ Cada regla es un patrón que ya falló de verdad en este repo, no una precaució
 - Dev Frontend: `npm run dev --workspace=apps/web`
 - Build Frontend: `npm run build --workspace=apps/web`
 - Docker Local: `docker compose up -d --build`
-- Logs de Servicio: `docker compose logs --tail=50 <servicio>` (servicios: `rpbot-bd`, `rp-disc-bot`, `rp-api`, `rp-web`, `nginx`)
+- Logs de Servicio: `docker compose logs --tail=50 <servicio>` (servicios: `maris-rpbot-bd`, `maris-rp-disc-bot`, `maris-rp-api`, `maris-rp-web`, `maris-nginx`)
 - Tests:
   - `npm test` = `test:unit` + `test:commands` + `test:smoke` (el smoke arranca la API contra una MySQL y aplica las migraciones).
   - `npm run test:unit`: `node --test` sobre `test/*.test.mjs`, con la BD mockeada; no necesita MySQL.
   - `npm run test:commands`: carga todos los comandos y valida sus definiciones (`scripts/verify-command-defs.mjs`).
-  - `npm run test:integration`: `test/integration/*.int.mjs` contra una MySQL real; borra los cuatro schemas al empezar. Se niega a correr contra los puertos 3306/3307 salvo `INTEGRATION_ALLOW_ANY_PORT=1`; por defecto usa 127.0.0.1:3399, usuario `root`, contraseña `testpw`.
+  - `npm run test:integration`: `test/integration/*.int.mjs` contra una MySQL real; borra los cuatro schemas al empezar. Se niega a correr contra los puertos 3306/3307/3308 salvo `INTEGRATION_ALLOW_ANY_PORT=1`; por defecto usa 127.0.0.1:3399, usuario `root`, contraseña `testpw`.
   - `npm run rehearse-migration` (fixture) y `npm run rehearse-migration -- --current`: ensayo de las migraciones 035-041 sobre datos del juego antiguo.
 - MySQL desechable para las pruebas, sin tocar la pila de producción del `docker-compose.yml` (su volumen apunta al RAID del servidor):
   `docker run -d --name rp-test-mysql -e MYSQL_ROOT_PASSWORD=testpw -p 3399:3306 mysql:8 --mysql-native-password=ON`
