@@ -19,6 +19,7 @@ def attemptRollback() {
     if [ -n "$missing" ]; then
       echo "No :rollback tag available for: ${missing} — looks like the first deploy on this host for it. Puede seguir caído, hace falta intervención manual."
     fi
+    echo "AVISO: si la migración 039 ya se aplicó, la imagen anterior no sirve con la base actual: restaura el volcado de /media/raid/database/rpbot/pre-deploy o el último backup."
   ''')
   if (status != 0) {
     echo 'El propio rollback ha fallado — hace falta intervención manual en el host.'
@@ -210,7 +211,34 @@ pipeline {
             -e DB_PORT=3306 \
             -e DB_USER=root \
             -e DB_PASSWORD="${TEST_DB_PASSWORD}" \
-            "${IMAGE_NAME}:latest" npm test
+            -e INTEGRATION_ALLOW_ANY_PORT=1 \
+            "${IMAGE_NAME}:latest" sh -c 'npm test && npm run test:integration'
+        '''
+      }
+    }
+
+    stage('Pre-deploy checks and backup') {
+      steps {
+        sh '''
+          set -u
+
+          for var in API_PUBLIC_URL API_SESSION_SECRET; do
+            grep -Eq "^${var}=.+" .env || (echo "Falta ${var} en el .env del servidor: la API no arrancaría." && exit 1)
+          done
+
+          if docker ps -q -f "name=^/ricardana-rp-mysql$" | grep -q .; then
+            stamp="$(date -u +%Y%m%dT%H%M%SZ)-${GIT_SHA}"
+            docker exec ricardana-rp-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers --databases rp_players rp_world rp_economy rp_ops' \
+              | docker run --rm -i -v /media/raid/database/rpbot/pre-deploy:/out alpine:3.19 sh -c "
+                  gzip > /out/pre-deploy-${stamp}.sql.gz
+                  test \\$(wc -c < /out/pre-deploy-${stamp}.sql.gz) -gt 1024
+                  ls -1t /out/pre-deploy-*.sql.gz | tail -n +6 | xargs -r rm -f
+                " \
+              || (echo "No se pudo hacer el volcado de seguridad previo al despliegue: se aborta antes de tocar nada." && exit 1)
+            echo "Volcado de seguridad guardado en /media/raid/database/rpbot/pre-deploy/pre-deploy-${stamp}.sql.gz"
+          else
+            echo "No hay contenedor de MySQL en marcha (primer despliegue en este host): no hay nada que volcar."
+          fi
         '''
       }
     }
@@ -274,7 +302,7 @@ pipeline {
 
               bot_ready=false; api_ok=false; web_ok=false
               if docker logs --tail=200 ricardana-rp-bot 2>&1 | grep -q 'Bot conectado como'; then bot_ready=true; fi
-              if docker exec ricardana-rp-api wget -q -O /dev/null -T 5 http://127.0.0.1:3000/ 2>/dev/null; then api_ok=true; fi
+              if docker exec ricardana-rp-api wget -S -O /dev/null -T 5 http://127.0.0.1:3000/api/me 2>&1 | grep -q 'HTTP/1.[01] 401'; then api_ok=true; fi
               if docker exec ricardana-rp-web wget -q -O /dev/null -T 5 http://127.0.0.1:4321/ 2>/dev/null; then web_ok=true; fi
 
               if [ "$bot_ready" = true ] && [ "$api_ok" = true ] && [ "$web_ok" = true ]; then
