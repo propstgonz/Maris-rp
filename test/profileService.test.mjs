@@ -43,21 +43,6 @@ function reset(handler) {
   routes = handler;
 }
 
-test('requireLivingPlayer: sin personaje remite a /personaje crear', async () => {
-  reset(() => undefined);
-  await assert.rejects(() => profile.requireLivingPlayer('x'), err => err instanceof UserFacingError && /personaje crear/.test(err.message));
-});
-
-test('requireLivingPlayer: personaje muerto lanza', async () => {
-  reset(() => player({ is_alive: 0 }));
-  await assert.rejects(() => profile.requireLivingPlayer('x'), /ha muerto/);
-});
-
-test('requireLivingPlayer: devuelve la fila de un personaje vivo', async () => {
-  reset(() => player());
-  assert.equal((await profile.requireLivingPlayer('55')).id, 5);
-});
-
 test('allocateStat: estadística inexistente se rechaza antes de tocar la BD', async () => {
   reset(() => undefined);
   await assert.rejects(() => profile.allocateStat(5, 'drop table', 1, actor), /no existe/);

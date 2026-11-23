@@ -73,6 +73,7 @@ export async function transferGoods(interaction, sender, user, itemId, quantity)
     row => row.item_id === itemId,
   );
   if (!stock) throw new UserFacingError('No tienes ese bien.');
+  if (!stock.is_active) throw new UserFacingError(`El bien ${clip(stock.display_name, 80)} está desactivado y no se puede traspasar.`);
   if (stock.quantity < quantity) {
     throw new UserFacingError(`Solo tienes ${formatNumber(stock.quantity)} de ${clip(stock.display_name, 80)}.`);
   }

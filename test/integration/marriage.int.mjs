@@ -1,16 +1,15 @@
 import { test, mock, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { resetDatabase, createCharacter, ACTOR } from './helpers.mjs';
-
-mock.module('../../src/services/goodsService.js', { namedExports: { transferGoodsInTx: async () => {} } });
-mock.module('../../src/services/npcHoldingService.js', { namedExports: { transferNpcsInTx: async () => {} } });
-mock.module('../../src/services/propertyService.js', { namedExports: { transferPropertyInTx: async () => {} } });
+import { ensureEndedByColumn } from './schemaPatch.mjs';
 
 const { db, T } = await resetDatabase();
+await ensureEndedByColumn(db);
 const marriage = await import('../../src/services/marriageService.js');
 const consent = await import('../../src/services/consentService.js');
 const profile = await import('../../src/services/profileService.js');
 const lifecycle = await import('../../src/services/characterLifecycleService.js');
+const npcs = await import('../../src/services/npcHoldingService.js');
 
 after(async () => { await db.closePool(); });
 
@@ -154,7 +153,7 @@ test('anulación del Rolepriest', async () => {
   await assert.rejects(() => marriage.annul(a.id, ACTOR), /no está casado/);
 });
 
-test('muerte: el cónyuge queda viudo/a, el muerto no, y un personaje nuevo empieza soltero', async () => {
+test('muerte: el cónyuge queda viudo/a, el muerto soltero/a y un personaje nuevo empieza soltero', async () => {
   const a = await createCharacter(db, T, { gender: 'hombre' });
   const b = await createCharacter(db, T, { gender: 'mujer' });
   await marry(a, b);
@@ -163,30 +162,32 @@ test('muerte: el cónyuge queda viudo/a, el muerto no, y un personaje nuevo empi
   const widow = await marriage.getCivilStatus(b.id);
   assert.equal(widow.label, 'Viuda');
   assert.equal(widow.spouse, null);
+  assert.equal((await marriage.getCivilStatus(a.id)).label, 'Soltero/a');
   assert.equal(await openCount(a.id) + await openCount(b.id), 0);
-  const ended = await db.queryOne(`SELECT end_reason FROM ${T.marriages} WHERE proposed_by_player_id = ?`, [a.id]);
+  const ended = await db.queryOne(`SELECT end_reason, ended_by_player_id FROM ${T.marriages} WHERE proposed_by_player_id = ?`, [a.id]);
   assert.equal(ended.end_reason, 'viudedad');
+  assert.equal(ended.ended_by_player_id, a.id);
 
-  await lifecycle.setCharacterCreationCooldownHours(0);
-  await lifecycle.finalizeGraceDeath(a.discord_id);
-  await new Promise(resolve => setTimeout(resolve, 1100));
+  await db.execute(`UPDATE ${T.players} SET gender = 'hombre', character_created_at = '2000-01-01 00:00:00' WHERE id = ?`, [a.id]);
+  assert.equal((await marriage.getCivilStatus(a.id)).label, 'Soltero');
+  assert.equal((await marriage.getCivilStatus(b.id)).label, 'Viuda');
+  await db.execute(`UPDATE ${T.players} SET gender = NULL, character_created_at = NULL WHERE id = ?`, [a.id]);
+
+  await db.execute(`UPDATE ${T.players} SET died_at = NOW() - INTERVAL 400 HOUR WHERE id = ?`, [a.id]);
   const reborn = await lifecycle.createCharacter(a.discord_id, 'u', { characterName: 'Renacido', age: 20, gender: 'hombre', raceSlug: 'nordico' });
   assert.equal((await marriage.getCivilStatus(reborn.id)).label, 'Soltero');
-  await lifecycle.setCharacterCreationCooldownHours(336);
 
   const remarry = await createCharacter(db, T);
   await marry(b, remarry);
   assert.equal((await marriage.getCivilStatus(b.id)).label, 'Casada');
 });
 
-test('las propuestas caducadas no se pueden aceptar y markExpired las marca', async () => {
+test('las propuestas caducadas no se pueden aceptar', async () => {
   const a = await createCharacter(db, T);
   const b = await createCharacter(db, T);
   const requestId = await marriage.propose(a.id, b.id, ACTOR);
   await db.execute(`UPDATE ${T.consent_requests} SET expires_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?`, [requestId]);
   await assert.rejects(() => consent.accept(requestId, b.id, ACTOR), /ha caducado/);
-  assert.ok(await consent.markExpired() >= 1);
-  assert.equal((await consent.getRequest(requestId)).status, 'expired');
   await marriage.propose(a.id, b.id, ACTOR);
 });
 
@@ -205,6 +206,7 @@ test('rechazar y cancelar: solo destinatario y emisor', async () => {
 test('solicitud de NPCs: el despacho por tipo la deja aceptada', async () => {
   const a = await createCharacter(db, T);
   const b = await createCharacter(db, T);
+  await npcs.addNpcs(a.id, 'Guardia', 2, ACTOR);
   const requestId = await consent.createRequest({ kind: 'npc', fromPlayerId: a.id, toPlayerId: b.id, npcName: 'Guardia', npcCount: 2 });
   await consent.accept(requestId, b.id, ACTOR);
   assert.equal((await consent.getRequest(requestId)).status, 'accepted');

@@ -1,12 +1,10 @@
 import { test, mock, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { resetDatabase, createCharacter, ACTOR } from './helpers.mjs';
-
-mock.module('../../src/services/goodsService.js', { namedExports: { transferGoodsInTx: async () => {} } });
-mock.module('../../src/services/npcHoldingService.js', { namedExports: { transferNpcsInTx: async () => {} } });
-mock.module('../../src/services/propertyService.js', { namedExports: { transferPropertyInTx: async () => {} } });
+import { ensureEndedByColumn } from './schemaPatch.mjs';
 
 const { db, T } = await resetDatabase();
+await ensureEndedByColumn(db);
 const profile = await import('../../src/services/profileService.js');
 const lifecycle = await import('../../src/services/characterLifecycleService.js');
 const consent = await import('../../src/services/consentService.js');
@@ -208,7 +206,7 @@ test('muerte: vacía inventarios, resetea perfil, viudedad del cónyuge y un sol
   assert.deepEqual(await holdingsCount(stranger.id), [1, 1, 3, 1]);
 
   const dead = await reload(victim.id);
-  assert.equal(dead.is_alive, 0);
+  assert.equal(dead.character_created_at, null);
   assert.ok(dead.died_at);
   assert.equal(dead.race_id, null);
   assert.equal(dead.menhir_id, null);
@@ -233,33 +231,53 @@ test('muerte: vacía inventarios, resetea perfil, viudedad del cónyuge y un sol
   assert.equal(snapshot.character.menhir, 'mago');
 });
 
-test('permadeath y poda: el jugador queda en blanco y el cooldown de creación se aplica', async () => {
+test('permadeath: el jugador queda en blanco y la espera de 336 h cuenta desde la muerte', async () => {
   const player = await createCharacter(db, T);
   await seedHoldings(player.id);
   await lifecycle.markDeceased(null, player.discord_id, 'prueba', { permadeath: true, actor: ACTOR });
   const blank = await reload(player.id);
   assert.equal(blank.character_created_at, null);
   assert.equal(blank.is_alive, 1);
+  assert.ok(blank.died_at);
   assert.deepEqual(await holdingsCount(player.id), [0, 0, 0, 0]);
 
-  await assert.rejects(
-    () => lifecycle.createCharacter(player.discord_id, 'u', { characterName: 'Otro', age: 20, gender: 'hombre', raceSlug: 'nordico' }),
-    /Todavía no puedes crear/
-  );
-  await lifecycle.setCharacterCreationCooldownHours(0);
-  const created = await lifecycle.createCharacter(player.discord_id, 'u', { characterName: 'Otro', age: 20, gender: 'hombre', raceSlug: 'nordico' });
+  const fields = { characterName: 'Otro', age: 20, gender: 'hombre', raceSlug: 'nordico' };
+  await assert.rejects(() => lifecycle.createCharacter(player.discord_id, 'u', fields), /Todavía no puedes crear/);
+
+  await db.execute(`UPDATE ${T.players} SET died_at = NOW() - INTERVAL 335 HOUR WHERE id = ?`, [player.id]);
+  assert.ok(await lifecycle.getCreationWaitSeconds(player.discord_id) > 0);
+  await assert.rejects(() => lifecycle.createCharacter(player.discord_id, 'u', fields), /Todavía no puedes crear/);
+
+  await db.execute(`UPDATE ${T.players} SET died_at = NOW() - INTERVAL 337 HOUR WHERE id = ?`, [player.id]);
+  assert.equal(await lifecycle.getCreationWaitSeconds(player.discord_id), 0);
+  const created = await lifecycle.createCharacter(player.discord_id, 'u', fields);
   assert.equal(created.character_name, 'Otro');
-  await lifecycle.setCharacterCreationCooldownHours(336);
 });
 
-test('revivir devuelve la vida, no los bienes', async () => {
+test('el cambio del cooldown de creación se audita con el actor', async () => {
+  await lifecycle.setCharacterCreationCooldownHours(100, ACTOR);
+  await lifecycle.setCharacterCreationCooldownHours(336, ACTOR);
+  const rows = await db.query(`SELECT actor_discord_id, details FROM ${T.audit_log} WHERE action = 'personaje.cooldown_creacion'`);
+  assert.ok(rows.length >= 2);
+  assert.equal(rows[0].actor_discord_id, ACTOR.discordId);
+  assert.equal(JSON.parse(rows[0].details).hours, 100);
+});
+
+test('setMenhir conserva menhir_chosen_at si ya había menhir y lo fija a ahora si no', async () => {
   const player = await createCharacter(db, T);
-  await lifecycle.killCharacter(player.discord_id, 'prueba', ACTOR);
-  await assert.rejects(() => profile.requireLivingPlayer(player.discord_id), /ha muerto/);
-  const revived = await lifecycle.reviveCharacter(player.discord_id, ACTOR);
-  assert.equal(revived.is_alive, 1);
-  await assert.rejects(() => lifecycle.reviveCharacter(player.discord_id, ACTOR), /ya está vivo/);
-  assert.equal((await profile.requireLivingPlayer(player.discord_id)).id, player.id);
+  await profile.setMenhir(player.id, 'mago', ACTOR);
+  const first = await reload(player.id);
+  assert.ok(first.menhir_chosen_at);
+  await db.execute(`UPDATE ${T.players} SET menhir_chosen_at = NOW() - INTERVAL 5 MONTH WHERE id = ?`, [player.id]);
+  const aged = await reload(player.id);
+  await profile.setMenhir(player.id, 'guerrero', ACTOR);
+  const changed = await reload(player.id);
+  assert.notEqual(changed.menhir_id, first.menhir_id);
+  assert.equal(changed.menhir_chosen_at, aged.menhir_chosen_at);
+
+  await profile.setMenhir(player.id, null, ACTOR);
+  await profile.setMenhir(player.id, 'mago', ACTOR);
+  assert.notEqual((await reload(player.id)).menhir_chosen_at, aged.menhir_chosen_at);
 });
 
 test('setAvatar actualiza la foto de un personaje vivo y rechaza nombres raros', async () => {

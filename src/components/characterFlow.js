@@ -3,17 +3,17 @@ import {
   TextInputBuilder, TextInputStyle,
 } from 'discord.js';
 import { listRaces } from '../services/profileService.js';
-import { createCharacter, hasCharacter } from '../services/characterLifecycleService.js';
+import { createCharacter, hasCharacter, getCreationWaitSeconds } from '../services/characterLifecycleService.js';
 import { STATS, STAT_LABELS, BASE_POINTS } from '../domain/picarda.js';
 import { resolveGuild } from '../utils/permissions.js';
 import { UserFacingError } from '../utils/errors.js';
-import { COLORS, E, buildSuccessEmbed, clip, signed } from '../utils/embeds.js';
+import { COLORS, E, buildSuccessEmbed, clip, signed, discordRelativeFromNow } from '../utils/embeds.js';
 import { GENDER_CHOICES } from '../utils/text.js';
 import { awaitFrom, replyEphemeral } from './confirm.js';
 
 const MODAL_TIMEOUT_MS = 5 * 60_000;
 const CREATION_TIMEOUT_MS = 5 * 60_000;
-const NAME_MAX = 100;
+const NAME_MAX = 80;
 const MAX_AGE = 1000;
 
 export function raceModifiers(race) {
@@ -92,6 +92,13 @@ export function buildCreationView({ characterName, age, races, state }) {
 
 export async function startCharacterCreation(interaction) {
   if (await hasCharacter(interaction.user.id)) throw new UserFacingError('Ya tienes un personaje.');
+  const waitSeconds = await getCreationWaitSeconds(interaction.user.id);
+  if (waitSeconds > 0) {
+    throw new UserFacingError(
+      `Todavía no puedes crear un personaje nuevo: podrás ${discordRelativeFromNow(waitSeconds)} ` +
+      '(la espera cuenta desde la muerte de tu anterior personaje).'
+    );
+  }
 
   const modalId = `identidad-${interaction.id}`;
   await interaction.showModal(buildIdentityModal(modalId));

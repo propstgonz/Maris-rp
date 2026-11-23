@@ -53,7 +53,7 @@ test('alta 0,5 + 0,25 = 0,75 y listado', async () => {
   assert.equal(await goods.addGoods(p.id, wood.id, 0.25, ACTOR), 0.75);
   const inv = await goods.listInventory(p.id);
   assert.equal(inv.total, 1);
-  assert.deepEqual(inv.rows[0], { item_id: wood.id, display_name: 'Madera', emoji: wood.emoji, category: 'Materiales', quantity: 0.75 });
+  assert.deepEqual(inv.rows[0], { item_id: wood.id, display_name: 'Madera', emoji: wood.emoji, is_active: 1, category: 'Materiales', quantity: 0.75 });
   await assert.rejects(goods.addGoods(p.id, wood.id, 0.001, ACTOR), /2 decimales/);
   await assert.rejects(goods.addGoods(p.id, wood.id, 0, ACTOR), /mayor que 0/);
   await assert.rejects(goods.addGoods(p.id, wood.id, -1, ACTOR), /mayor que 0/);
@@ -134,4 +134,15 @@ test('carrera: traspasos cruzados A->B y B->A no pierden bienes ni caen en deadl
   for (const f of results.filter(r => r.status === 'rejected')) assert.equal(f.reason.name, 'UserFacingError', f.reason.message);
   const [ra, rb] = await Promise.all([goods.listInventory(a.id), goods.listInventory(b.id)]);
   assert.equal((ra.rows[0]?.quantity ?? 0) + (rb.rows[0]?.quantity ?? 0), 20);
+});
+
+test('searchTypes con onlyInactive e includeInactive; validateQuantity con tolerancia relativa', async () => {
+  const hidden = await goods.createType({ displayName: 'Oculto Busqueda' }, ACTOR);
+  await goods.setTypeActive(hidden.id, false, ACTOR);
+  assert.deepEqual((await goods.searchTypes('Oculto')).map(t => t.id), []);
+  assert.deepEqual((await goods.searchTypes('Oculto', 25, { onlyInactive: true })).map(t => t.id), [hidden.id]);
+  assert.deepEqual((await goods.searchTypes('Oculto', 25, { includeInactive: true })).map(t => t.id), [hidden.id]);
+  assert.equal(goods.validateQuantity(1234567.89), 1234567.89);
+  assert.equal(goods.validateQuantity(0.1 + 0.2), 0.3);
+  assert.throws(() => goods.validateQuantity(1.234), /2 decimales/);
 });

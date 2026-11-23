@@ -101,19 +101,19 @@ const LIST_LIMIT = 10;
 const INCOMING_BUTTON_ROWS = 3;
 const OUTGOING_BUTTONS = 5;
 
-function listField(title, rows, counterpart, nameKey) {
+function listField(title, rows, total, counterpart, nameKey) {
   const lines = rows.slice(0, LIST_LIMIT).map(row =>
     `\`#${row.id}\` ${KIND_NOUN[row.kind]}: ${requestLine(row)} — ${counterpart} **${clip(row[nameKey], 60)}** · caduca ${discordTimestamp(row.expires_at, 'R')}`
   );
-  if (rows.length > LIST_LIMIT) lines.push(`…y ${rows.length - LIST_LIMIT} más`);
-  return { name: `${title} (${rows.length})`, value: clip(lines.join('\n'), 1024) };
+  if (total > lines.length) lines.push(`…y ${total - lines.length} más`);
+  return { name: `${title} (${total})`, value: clip(lines.join('\n'), 1024) };
 }
 
-export function buildRequestListView(userId, { incoming, outgoing }) {
+export function buildRequestListView(userId, { incoming, outgoing, incomingTotal = incoming.length, outgoingTotal = outgoing.length }) {
   const embed = new EmbedBuilder().setColor(COLORS.BLUE).setTitle('📨 Solicitudes pendientes');
   if (incoming.length === 0 && outgoing.length === 0) embed.setDescription('No tienes solicitudes pendientes.');
-  if (incoming.length > 0) embed.addFields(listField('📥 Recibidas', incoming, 'de', 'from_character_name'));
-  if (outgoing.length > 0) embed.addFields(listField('📤 Enviadas', outgoing, 'para', 'to_character_name'));
+  if (incoming.length > 0) embed.addFields(listField('📥 Recibidas', incoming, incomingTotal, 'de', 'from_character_name'));
+  if (outgoing.length > 0) embed.addFields(listField('📤 Enviadas', outgoing, outgoingTotal, 'para', 'to_character_name'));
 
   const components = incoming.slice(0, INCOMING_BUTTON_ROWS).map(row => new ActionRowBuilder().addComponents(
     consentButton('accept', `Aceptar #${row.id}`, ButtonStyle.Success, userId, row.id),

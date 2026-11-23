@@ -18,7 +18,7 @@ export default {
 
     try {
       await markDeceased(client, discordId, 'abandonó el servidor', { permadeath: false });
-      logger.info(`[MemberRemove] "${player.character_name}" (${discordId}) marcado como muerto — periodo de gracia de 7 días, revivible si vuelve.`);
+      logger.info(`[MemberRemove] "${player.character_name}" (${discordId}) en periodo de gracia de 7 días, lo recupera intacto si vuelve.`);
     } catch (err) {
       logger.warn(`[MemberRemove] No se pudo marcar como muerto a ${discordId}: ${err.message}`);
     }

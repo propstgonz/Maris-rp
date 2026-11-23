@@ -16,6 +16,9 @@ const cases = [
   [{ active: false, lastEndReason: 'divorcio', gender: 'mujer' }, 'Soltera'],
   [{ active: false, lastEndReason: 'anulacion', gender: 'hombre' }, 'Soltero'],
   [{ active: true, lastEndReason: 'viudedad', gender: 'mujer' }, 'Casada'],
+  [{ active: false, lastEndReason: 'viudedad', endedByPlayerId: 5, playerId: 7, gender: 'mujer' }, 'Viuda'],
+  [{ active: false, lastEndReason: 'viudedad', endedByPlayerId: 7, playerId: 7, gender: 'mujer' }, 'Soltera'],
+  [{ active: false, lastEndReason: 'viudedad', endedByPlayerId: 7, playerId: 7, gender: null }, 'Soltero/a'],
 ];
 
 for (const [input, expected] of cases) {

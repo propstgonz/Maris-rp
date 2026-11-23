@@ -1,18 +1,17 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { requireRolepriest } from '../../utils/permissions.js';
-import { actorFrom, requireTargetCharacter } from '../../utils/interactionContext.js';
+import { actorFrom, rejectSelfTarget, requireOtherTarget } from '../../utils/interactionContext.js';
 import { propertyTypeChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
-import { confirmAction, paginate, replyEphemeral, staffAutocomplete, includesText, withDefined } from '../../utils/staffUi.js';
+import { confirmAction, paginate, replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
 import { getProfile } from '../../services/profileService.js';
+import { findPlayerById } from '../../services/playerService.js';
 import { UserFacingError } from '../../utils/errors.js';
 import {
   PROPERTY_CATEGORIES, listTypes, createType, editType, setTypeActive,
   grantProperty, revokeProperty, setLevel, adminTransferProperty, getProperty,
 } from '../../services/propertyService.js';
 
-const MAX_CHOICES = 25;
-const MAX_NAME = 100;
 const MAX_LEVEL = 1000;
 
 const categoryLabel = value => PROPERTY_CATEGORIES.find(c => c.value === value)?.label ?? value;
@@ -93,14 +92,10 @@ export default {
       .setDescription('Lista todos los tipos de propiedad, activos o no')),
 
   autocomplete: staffAutocomplete({
-    tipo: async (text, interaction) => {
+    tipo: (text, interaction) => {
       const sub = interaction.options.getSubcommand();
-      if (sub === 'otorgar' || sub === 'tipo-desactivar') return propertyTypeChoices(text);
-      const types = await listTypes({ includeInactive: true });
-      return types
-        .filter(t => (sub === 'tipo-activar' ? !t.is_active : true) && includesText(text, t.display_name, t.name))
-        .slice(0, MAX_CHOICES)
-        .map(t => ({ name: `${t.display_name}${t.is_active ? '' : ' (inactivo)'}`.slice(0, MAX_NAME), value: t.id }));
+      if (sub === 'tipo-activar') return propertyTypeChoices(text, { onlyInactive: true });
+      return propertyTypeChoices(text, sub === 'tipo-editar' ? { includeInactive: true } : undefined);
     },
   }),
 
@@ -142,7 +137,7 @@ export default {
     }
 
     if (sub === 'otorgar') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const property = await grantProperty(player.id, interaction.options.getInteger('tipo', true), {
         name: interaction.options.getString('nombre'),
         level: interaction.options.getInteger('nivel') ?? undefined,
@@ -155,11 +150,13 @@ export default {
 
     const propertyId = interaction.options.getInteger('propiedad', true);
     const property = await requireProperty(propertyId);
+    const owner = await findPlayerById(property.owner_player_id);
+    rejectSelfTarget(interaction, owner?.discord_id);
 
     if (sub === 'revocar') {
       const done = await confirmAction(interaction, `Revocar la propiedad #${propertyId}: ${await describe(property)}. No se puede deshacer.`);
       if (!done) return;
-      await revokeProperty(propertyId, actor);
+      await revokeProperty(propertyId, property.owner_player_id, actor);
       return done({ embeds: [buildSuccessEmbed('Propiedad revocada', `#${propertyId} **${property.type_display_name}** ya no existe.`)] });
     }
 
@@ -169,7 +166,7 @@ export default {
       return reply({ embeds: [buildSuccessEmbed('Nivel fijado', `#${propertyId} **${updated.type_display_name}**: nivel **${updated.level}**.`)] });
     }
 
-    const to = await requireTargetCharacter(interaction, 'destino');
+    const to = await requireOtherTarget(interaction, 'destino');
     await adminTransferProperty(propertyId, to.id, actor);
     return reply({
       embeds: [buildSuccessEmbed('Propiedad transferida', `#${propertyId} **${property.type_display_name}** pasa a <@${to.discord_id}>.`)],

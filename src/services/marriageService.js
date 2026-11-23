@@ -4,6 +4,9 @@ import { UserFacingError } from '../utils/errors.js';
 import { civilStatusLabel } from '../domain/civilStatus.js';
 import { logAction } from './auditLogService.js';
 import { createRequest } from './consentService.js';
+import { lockPlayersInTx } from './playerService.js';
+
+const DEADLOCK_RETRIES = 3;
 
 const SQL = {
   lockLivingPlayers: `
@@ -33,10 +36,10 @@ const SQL = {
       AND (from_player_id IN (?, ?) OR to_player_id IN (?, ?))
   `,
   openMarriageOf: `
-    SELECT marriage_id FROM ${T.marriage_members} WHERE player_id = ? AND open_slot = 1
+    SELECT marriage_id FROM ${T.marriage_members} WHERE player_id = ? AND open_slot = 1 FOR UPDATE
   `,
   endMarriage: `
-    UPDATE ${T.marriages} SET ended_at = NOW(), end_reason = ? WHERE id = ? AND ended_at IS NULL
+    UPDATE ${T.marriages} SET ended_at = NOW(), end_reason = ?, ended_by_player_id = ? WHERE id = ? AND ended_at IS NULL
   `,
   closeMembers: `UPDATE ${T.marriage_members} SET open_slot = NULL WHERE marriage_id = ?`,
   spouseOf: `
@@ -46,8 +49,16 @@ const SQL = {
     JOIN ${T.players} sp ON sp.id = other.player_id
     WHERE mine.player_id = ? AND mine.open_slot = 1
   `,
+  spouseOfLocked: `
+    SELECT mine.marriage_id, sp.id, sp.discord_id, sp.character_name
+    FROM ${T.marriage_members} mine
+    JOIN ${T.marriage_members} other ON other.marriage_id = mine.marriage_id AND other.player_id <> mine.player_id
+    JOIN ${T.players} sp ON sp.id = other.player_id
+    WHERE mine.player_id = ? AND mine.open_slot = 1
+    FOR UPDATE OF mine, other
+  `,
   lastEnded: `
-    SELECT m.end_reason
+    SELECT m.end_reason, m.ended_by_player_id
     FROM ${T.marriage_members} mm
     JOIN ${T.marriages} m ON m.id = mm.marriage_id
     JOIN ${T.players} p ON p.id = mm.player_id
@@ -65,24 +76,36 @@ function spouseView(spouse) {
   return spouse ? { id: spouse.id, discordId: spouse.discord_id, characterName: spouse.character_name } : null;
 }
 
-async function endOpenMarriage(playerId, reason, notFoundMessage) {
+export async function findSpouseId(playerId) {
+  return (await queryOne(SQL.spouseOf, [playerId]))?.id ?? null;
+}
+
+export async function lockCoupleInTx(playerId, hintSpouseId = null) {
+  await lockPlayersInTx([playerId, hintSpouseId]);
+  const spouse = await queryOne(SQL.spouseOfLocked, [playerId]);
+  if (spouse && spouse.id !== hintSpouseId) await lockPlayersInTx([playerId, hintSpouseId, spouse.id]);
+  return spouse ?? null;
+}
+
+async function endOpenMarriage(playerId, reason, endedByPlayerId, notFoundMessage) {
   const open = await queryOne(SQL.openMarriageOf, [playerId]);
   if (!open) throw new UserFacingError(notFoundMessage);
-  const ended = await execute(SQL.endMarriage, [reason, open.marriage_id]);
+  const ended = await execute(SQL.endMarriage, [reason, endedByPlayerId, open.marriage_id]);
   if (ended.changes === 0) throw new UserFacingError(notFoundMessage);
   await execute(SQL.closeMembers, [open.marriage_id]);
   return open.marriage_id;
 }
 
-async function endAndAudit(playerId, reason, notFoundMessage, action, actor) {
+async function endAndAudit(playerId, { reason, endedByPlayerId, notFoundMessage, action }, actor) {
+  const hint = await findSpouseId(playerId);
+  if (hint === null) throw new UserFacingError(notFoundMessage);
   const { marriageId, spouse } = await withTransaction(async () => {
-    const spouseRow = await queryOne(SQL.spouseOf, [playerId]);
-    return { marriageId: await endOpenMarriage(playerId, reason, notFoundMessage), spouse: spouseRow };
-  });
+    const spouseRow = await lockCoupleInTx(playerId, hint);
+    return { marriageId: await endOpenMarriage(playerId, reason, endedByPlayerId, notFoundMessage), spouse: spouseRow };
+  }, { retryOnDeadlock: DEADLOCK_RETRIES });
   const self = await queryOne(SQL.getPlayer, [playerId]);
   await logAction({
-    source: actor.source, actorDiscordId: actor.discordId, actorUsername: actor.username,
-    action, target: self?.discord_id ?? null,
+    actor, action, target: self?.discord_id ?? null,
     details: { marriageId, playerId, spouseId: spouse?.id ?? null },
   });
   return { marriageId, spouse: spouseView(spouse) };
@@ -105,8 +128,7 @@ export async function propose(fromPlayerId, toPlayerId, actor) {
   const requestId = await createRequest({ kind: 'marriage', fromPlayerId, toPlayerId });
   const [from, to] = await Promise.all([queryOne(SQL.getPlayer, [fromPlayerId]), queryOne(SQL.getPlayer, [toPlayerId])]);
   await logAction({
-    source: actor.source, actorDiscordId: actor.discordId, actorUsername: actor.username,
-    action: 'matrimonio.propuesto', target: to?.discord_id ?? null,
+    actor, action: 'matrimonio.propuesto', target: to?.discord_id ?? null,
     details: { requestId, fromPlayerId, toPlayerId, from: from?.character_name, to: to?.character_name },
   });
   return requestId;
@@ -134,18 +156,22 @@ export async function acceptMarriageInTx(request) {
 
 export async function divorce(playerId, actor) {
   assertPlayerId(playerId);
-  return endAndAudit(playerId, 'divorcio', 'No estás casado/a.', 'matrimonio.divorcio', actor);
+  return endAndAudit(playerId, {
+    reason: 'divorcio', endedByPlayerId: playerId, notFoundMessage: 'No estás casado/a.', action: 'matrimonio.divorcio',
+  }, actor);
 }
 
 export async function annul(playerId, actor) {
   assertPlayerId(playerId);
-  return endAndAudit(playerId, 'anulacion', 'Ese jugador no está casado/a.', 'matrimonio.anulado', actor);
+  return endAndAudit(playerId, {
+    reason: 'anulacion', endedByPlayerId: null, notFoundMessage: 'Ese jugador no está casado/a.', action: 'matrimonio.anulado',
+  }, actor);
 }
 
 export async function endMarriagesOnDeathInTx(playerId) {
   const open = await queryOne(SQL.openMarriageOf, [playerId]);
   if (!open) return null;
-  const ended = await execute(SQL.endMarriage, ['viudedad', open.marriage_id]);
+  const ended = await execute(SQL.endMarriage, ['viudedad', playerId, open.marriage_id]);
   await execute(SQL.closeMembers, [open.marriage_id]);
   return ended.changes === 0 ? null : open.marriage_id;
 }
@@ -157,7 +183,10 @@ export async function getCivilStatus(playerId) {
   ]);
   const last = spouse ? null : await queryOne(SQL.lastEnded, [playerId]);
   return {
-    label: civilStatusLabel({ active: Boolean(spouse), lastEndReason: last?.end_reason, gender: player?.gender }),
+    label: civilStatusLabel({
+      active: Boolean(spouse), lastEndReason: last?.end_reason,
+      endedByPlayerId: last?.ended_by_player_id ?? null, playerId, gender: player?.gender,
+    }),
     spouse: spouseView(spouse),
     marriageId: spouse?.marriage_id ?? null,
   };

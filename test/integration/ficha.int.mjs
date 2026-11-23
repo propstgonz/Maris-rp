@@ -2,11 +2,13 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { resetDatabase, createCharacter, ACTOR } from './helpers.mjs';
+import { ensureEndedByColumn } from './schemaPatch.mjs';
 
 let db, T, server, base;
 
 before(async () => {
   ({ db, T } = await resetDatabase());
+  await ensureEndedByColumn(db);
   const { createPlayersRouter } = await import('../../src/api/routes/players.js');
   const app = express();
   app.use((req, res, next) => {

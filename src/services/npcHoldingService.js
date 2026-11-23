@@ -2,9 +2,11 @@ import { query, queryOne, execute, withTransaction } from '../database/index.js'
 import { T } from '../database/tables.js';
 import { UserFacingError } from '../utils/errors.js';
 import { logAction } from './auditLogService.js';
+import { lockPlayersInTx } from './playerService.js';
 
 const MAX_COUNT = 50;
 const MAX_NAME = 80;
+const DEADLOCK_RETRIES = 3;
 
 const SQL = {
   aliveOwner: `
@@ -54,14 +56,7 @@ async function countOf(ownerId, name) {
 }
 
 function audit(actor, action, target, details) {
-  return logAction({
-    source: actor.source,
-    actorDiscordId: actor.discordId,
-    actorUsername: actor.username,
-    action,
-    target,
-    details,
-  });
+  return logAction({ actor, action, target, details });
 }
 
 export async function listGrouped(ownerId, { page = 1, pageSize = 10 } = {}) {
@@ -116,6 +111,9 @@ export async function transferNpcsInTx(fromId, toId, name, count) {
 
 export async function adminTransferNpcs(fromId, toId, name, count, actor) {
   const clean = validateName(name);
-  await withTransaction(() => transferNpcsInTx(fromId, toId, clean, count));
+  await withTransaction(async () => {
+    await lockPlayersInTx([fromId, toId]);
+    await transferNpcsInTx(fromId, toId, clean, count);
+  }, { retryOnDeadlock: DEADLOCK_RETRIES });
   await audit(actor, 'npcs.traspaso', String(fromId), { name: clean, count, toPlayerId: toId });
 }

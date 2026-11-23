@@ -1,6 +1,7 @@
 import { createPool } from 'mysql2/promise';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import logger from '../utils/logger.js';
+import { UserFacingError } from '../utils/errors.js';
 import { runMigrations, seedLegacyModmailCategory } from './migrate.js';
 
 const connectionConfig = {
@@ -93,9 +94,14 @@ export async function execute(sql, params = []) {
   return { changes: result.affectedRows, lastInsertRowid: result.insertId };
 }
 
-export async function withTransaction(fn) {
-  if (inTransaction()) return fn();
+const DEADLOCK_ERRNO = 1213;
+const DEADLOCK_BACKOFF_MS = 15;
 
+function isDeadlock(err) {
+  return err?.errno === DEADLOCK_ERRNO || err?.code === 'ER_LOCK_DEADLOCK';
+}
+
+async function runTransaction(fn) {
   const conn = await requirePool().getConnection();
   try {
     await conn.beginTransaction();
@@ -107,6 +113,22 @@ export async function withTransaction(fn) {
     throw err;
   } finally {
     conn.release();
+  }
+}
+
+export async function withTransaction(fn, { retryOnDeadlock = 0 } = {}) {
+  if (inTransaction()) return fn();
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await runTransaction(fn);
+    } catch (err) {
+      if (!isDeadlock(err) || retryOnDeadlock === 0) throw err;
+      if (attempt >= retryOnDeadlock) {
+        throw new UserFacingError('Hubo un choque con otra operación, inténtalo de nuevo.');
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.random() * DEADLOCK_BACKOFF_MS * (attempt + 1)));
+    }
   }
 }
 

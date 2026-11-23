@@ -71,9 +71,9 @@ export async function startCronJobs(client) {
 
   await scheduleBackupJob();
 
-  scheduleDaily('limpieza de personajes expirados', '30 0 * * *', 'characterPrune', async () => {
+  scheduleDaily('muerte definitiva de personajes con la gracia vencida', '30 0 * * *', 'characterPrune', async () => {
     const cleaned = await pruneExpiredCharacters(client);
-    if (cleaned > 0) logger.info(`[Cron] 🗑️ ${cleaned} personaje(s) expirado(s) limpiado(s).`);
+    if (cleaned > 0) logger.info(`[Cron] 🗑️ ${cleaned} personaje(s) con la gracia vencida pasaron a muerte definitiva.`);
   });
 
   scheduleDaily('purga del registro de acciones', '0 1 * * *', 'auditPrune', async () => {

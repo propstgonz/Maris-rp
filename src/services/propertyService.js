@@ -3,6 +3,7 @@ import { T } from '../database/tables.js';
 import { slugify } from '../utils/text.js';
 import { UserFacingError } from '../utils/errors.js';
 import { logAction } from './auditLogService.js';
+import { lockPlayersInTx } from './playerService.js';
 
 export const PROPERTY_CATEGORIES = [
   { value: 'vivienda',        label: 'Vivienda' },
@@ -22,14 +23,14 @@ const MAX_NAME = 191;
 const MAX_LOCATION = 100;
 const MAX_DESCRIPTION = 2000;
 const MAX_EMOJI = 32;
+const DEADLOCK_RETRIES = 3;
 
 const SQL = {
   listTypes:       `SELECT * FROM ${T.property_types} ORDER BY category, display_name`,
   listActiveTypes: `SELECT * FROM ${T.property_types} WHERE is_active = 1 ORDER BY category, display_name`,
   searchTypes: `
     SELECT * FROM ${T.property_types}
-    WHERE is_active = 1 AND display_name LIKE ? ESCAPE '\\\\'
-    ORDER BY display_name LIMIT `,
+    WHERE display_name LIKE ? ESCAPE '\\\\' AND `,
   getType:       `SELECT * FROM ${T.property_types} WHERE id = ?`,
   insertType: `
     INSERT INTO ${T.property_types} (name, display_name, category, emoji, description)
@@ -58,21 +59,18 @@ const SQL = {
     WHERE p.id = ?
   `,
   lock:     `SELECT id, owner_player_id FROM ${T.properties} WHERE id = ? FOR UPDATE`,
+  lockless: `SELECT id, owner_player_id FROM ${T.properties} WHERE id = ?`,
   insert: `
     INSERT INTO ${T.properties} (owner_player_id, property_type_id, name, level, location)
     VALUES (?, ?, ?, ?, ?)
   `,
-  delete:   `DELETE FROM ${T.properties} WHERE id = ?`,
+  delete:   `DELETE FROM ${T.properties} WHERE id = ? AND owner_player_id = ?`,
   setLevel: `UPDATE ${T.properties} SET level = ? WHERE id = ?`,
   transfer: `
     UPDATE ${T.properties} SET owner_player_id = ?
     WHERE id = ? AND owner_player_id = ?
   `,
 };
-
-function actorFields(actor) {
-  return { source: actor.source, actorDiscordId: actor.discordId, actorUsername: actor.username };
-}
 
 function cleanText(value, max, label) {
   if (value == null) return null;
@@ -111,10 +109,11 @@ export async function listTypes({ includeInactive = false } = {}) {
   return query(includeInactive ? SQL.listTypes : SQL.listActiveTypes);
 }
 
-export async function searchTypes(text, limit = 25) {
+export async function searchTypes(text, limit = 25, { onlyInactive = false, includeInactive = false } = {}) {
   const safeLimit = Math.min(Math.max(Math.trunc(Number(limit)) || 25, 1), 25);
   const like = `%${String(text ?? '').replace(/[\\%_]/g, c => `\\${c}`)}%`;
-  return query(`${SQL.searchTypes}${safeLimit}`, [like]);
+  const activity = includeInactive ? '1 = 1' : `is_active = ${onlyInactive ? 0 : 1}`;
+  return query(`${SQL.searchTypes}${activity} ORDER BY display_name LIMIT ${safeLimit}`, [like]);
 }
 
 export async function createType({ name, displayName, category, emoji, description }, actor) {
@@ -135,7 +134,7 @@ export async function createType({ name, displayName, category, emoji, descripti
   }
   const type = await queryOne(SQL.getType, [result.lastInsertRowid]);
   await logAction({
-    ...actorFields(actor), action: 'propiedades.tipo_creado',
+    actor, action: 'propiedades.tipo_creado',
     target: display, details: { typeId: type.id, category },
   });
   return type;
@@ -160,7 +159,7 @@ export async function editType(id, fields, actor) {
   ]);
   const type = await queryOne(SQL.getType, [id]);
   await logAction({
-    ...actorFields(actor), action: 'propiedades.tipo_editado',
+    actor, action: 'propiedades.tipo_editado',
     target: display, details: { typeId: id, edited: Object.keys(fields) },
   });
   return type;
@@ -171,7 +170,7 @@ export async function setTypeActive(id, isActive, actor) {
   if (changes !== 1) throw new UserFacingError('Ese tipo de propiedad no existe.');
   const type = await queryOne(SQL.getType, [id]);
   await logAction({
-    ...actorFields(actor), action: isActive ? 'propiedades.tipo_activado' : 'propiedades.tipo_desactivado',
+    actor, action: isActive ? 'propiedades.tipo_activado' : 'propiedades.tipo_desactivado',
     target: type.display_name, details: { typeId: id, isActive: Boolean(isActive) },
   });
   return type;
@@ -206,23 +205,23 @@ export async function grantProperty(ownerId, typeId, { name, level = 1, location
   });
 
   await logAction({
-    ...actorFields(actor), action: 'propiedades.otorgada',
+    actor, action: 'propiedades.otorgada',
     target: String(ownerId), details: { propertyId: property.id, type: property.type_display_name, level },
   });
   return property;
 }
 
-export async function revokeProperty(propertyId, actor) {
+export async function revokeProperty(propertyId, expectedOwnerId, actor) {
   const property = await withTransaction(async () => {
     if (!(await queryOne(SQL.lock, [propertyId]))) throw new UserFacingError('Esa propiedad no existe.');
     const full = await getProperty(propertyId);
-    const { changes } = await execute(SQL.delete, [propertyId]);
-    if (changes !== 1) throw new UserFacingError('Esa propiedad no existe.');
+    const { changes } = await execute(SQL.delete, [propertyId, expectedOwnerId]);
+    if (changes !== 1) throw new UserFacingError('Esa propiedad ha cambiado de dueño desde que la consultaste. Revísala de nuevo.');
     return full;
   });
 
   await logAction({
-    ...actorFields(actor), action: 'propiedades.revocada',
+    actor, action: 'propiedades.revocada',
     target: String(property.owner_player_id), details: { propertyId, type: property.type_display_name },
   });
   return property;
@@ -234,7 +233,7 @@ export async function setLevel(propertyId, level, actor) {
   if (changes !== 1) throw new UserFacingError('Esa propiedad no existe.');
   const property = await getProperty(propertyId);
   await logAction({
-    ...actorFields(actor), action: 'propiedades.nivel',
+    actor, action: 'propiedades.nivel',
     target: String(property.owner_player_id), details: { propertyId, type: property.type_display_name, level },
   });
   return property;
@@ -248,15 +247,16 @@ export async function transferPropertyInTx(fromId, toId, propertyId) {
 }
 
 export async function adminTransferProperty(propertyId, toId, actor) {
-  const fromId = await withTransaction(async () => {
-    const row = await queryOne(SQL.lock, [propertyId]);
-    if (!row) throw new UserFacingError('Esa propiedad no existe.');
-    await transferPropertyInTx(row.owner_player_id, toId, propertyId);
-    return row.owner_player_id;
-  });
+  const current = await queryOne(SQL.lockless, [propertyId]);
+  if (!current) throw new UserFacingError('Esa propiedad no existe.');
+  const fromId = current.owner_player_id;
+  await withTransaction(async () => {
+    await lockPlayersInTx([fromId, toId]);
+    await transferPropertyInTx(fromId, toId, propertyId);
+  }, { retryOnDeadlock: DEADLOCK_RETRIES });
 
   await logAction({
-    ...actorFields(actor), action: 'propiedades.traspaso',
+    actor, action: 'propiedades.traspaso',
     target: String(toId), details: { propertyId, fromPlayerId: fromId, toPlayerId: toId, admin: true },
   });
   return getProperty(propertyId);
