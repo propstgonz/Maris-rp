@@ -23,7 +23,7 @@ El personaje tiene siete estadísticas: Potencia, Intuición, Chiripa, Autismo, 
 - Los **puntos extra** solo los concede un Rolepriest, porque el Tomegrama los considera muy difíciles de conseguir: `/perfil-admin puntos-extra`.
 - Para corregir un error: `/perfil-admin corregir-stat` fija la base de una estadística (de 0 a 6, sin dejar la suma por encima de 8 más los puntos extra) y `/perfil-admin identidad` cambia nombre, edad o género.
 - El jugador crea su personaje con `/personaje crear` (nombre, edad, género y raza). Con la creación se abre su canal de modmail y recibe el rol identificativo.
-- Cada personaje tiene una **Magia** que sale de el Autismo efectivo: 25 por punto, con un tope literal de 150 más 25 por el bono racial de Autismo (150, 175 o 200). El Menhir del Mago suma 50 aparte; el Menhir Ritual convierte toda la Magia en Vida (Magia entre 100). No se guarda: se calcula al mostrarla.
+- Cada personaje tiene una **Magia** que sale del Autismo efectivo: 25 por punto, con un tope literal de 150 más 25 por el bono racial de Autismo (150, 175 o 200). El Menhir del Mago suma 50 aparte; el Menhir Ritual convierte toda la Magia en Vida (Magia entre 100). No se guarda: se calcula al mostrarla.
 
 ---
 
