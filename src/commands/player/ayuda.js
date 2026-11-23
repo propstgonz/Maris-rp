@@ -1,37 +1,52 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
-import { COLORS } from '../../utils/embeds.js';
+import { COLORS, E } from '../../utils/embeds.js';
 
 const SECTIONS = [
   {
-    name: '🧍 Tu personaje',
+    name: `${E.perfil} Tu personaje`,
     value:
-      'Al crear tu personaje se abre un canal privado **rp-<tu-personaje>**, visible solo para ti y Staff. ' +
-      'Puedes rolear ahí directamente, o escribir por **MD al bot** (se retransmite igual).',
+      '`/personaje crear` — nombre, edad, género y raza.\n' +
+      '`/personaje foto` — cambia tu foto.\n' +
+      '`/personaje historial` — personajes que has tenido.\n' +
+      '`/perfil` — estadísticas, raza, menhir y estado civil. Desde ahí asignas tus puntos y eliges menhir.',
+  },
+  {
+    name: `${E.bienes} Inventarios`,
+    value:
+      '`/npcs ver` · `/bienes ver` · `/propiedades ver` — tus pertenencias, por páginas.\n' +
+      '`/npcs traspasar` · `/bienes traspasar` · `/propiedades traspasar` — ofrece algo a otro jugador; tiene que aceptar.',
+  },
+  {
+    name: `${E.escuelas} Magia`,
+    value:
+      '`/escuelas ver` — nivel, siguiente meta y Magia total.\n' +
+      '`/escuelas iniciar` — escuela gratuita (Autismo efectivo 6 o más).\n' +
+      '`/conjuros` — conjuros desbloqueados, con filtro por escuela.',
+  },
+  {
+    name: `${E.civil} Matrimonio y solicitudes`,
+    value:
+      '`/matrimonio proponer` · `/matrimonio divorciar`.\n' +
+      '`/solicitudes` — traspasos y propuestas pendientes: acepta, rechaza o cancela.',
   },
   {
     name: '🎲 Dados',
     value: '`/dado [caras]` — tira un dado libre (D6, D10, D12, D20 o D100).',
-  },
-  {
-    name: '💀 Muerte',
-    value:
-      'Si tu personaje muere tienes **7 días de gracia** para que Staff lo reviva. ' +
-      'Pasado ese plazo se borra y podrás crear uno nuevo.',
   },
 ];
 
 export default {
   data: new SlashCommandBuilder()
     .setName('ayuda')
-    .setDescription('Guía rápida: cómo empezar y qué puedes hacer'),
+    .setDescription('Guía rápida de los comandos de jugador'),
 
   async execute(interaction) {
     const embed = new EmbedBuilder()
       .setColor(COLORS.BLUE)
       .setTitle('📖 Guía rápida')
-      .setDescription('Los comandos son `/slash` — escríbelos y Discord te guía con las opciones.')
+      .setDescription('Tus consultas solo las ves tú. Escribe `/` y Discord te guía con las opciones.')
       .addFields(SECTIONS)
-      .setFooter({ text: '¿Dudas? Pregunta a Staff o a un Rolepriest.' });
+      .setFooter({ text: '¿Dudas? Pregunta a un Rolepriest.' });
 
     return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
