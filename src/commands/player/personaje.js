@@ -19,9 +19,6 @@ async function setPhoto(interaction) {
   const attachment = interaction.options.getAttachment('imagen', true);
   const validation = validateImageAttachment(attachment, MAX_IMAGE_SIZE_BYTES);
   if (!validation.ok) throw new UserFacingError(validation.error);
-  if (typeof profileService.setAvatar !== 'function') {
-    throw new UserFacingError('Cambiar la foto todavía no está disponible.');
-  }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const { filename } = await downloadAndSaveImage(attachment, validation.ext, AVATARS_WRITE_PATH, `player_${interaction.user.id}`);

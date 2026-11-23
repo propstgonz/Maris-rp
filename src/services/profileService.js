@@ -284,6 +284,21 @@ function validateIdentity({ characterName, age, gender }) {
   return { sets, params };
 }
 
+export async function setAvatar(playerId, relativeFilename, actor) {
+  assertPlayerId(playerId);
+  if (typeof relativeFilename !== 'string' || !/^avatars\/[\w.-]{1,200}$/.test(relativeFilename)) {
+    throw new UserFacingError('Nombre de fichero de foto no válido.');
+  }
+  const { changes } = await execute(
+    `UPDATE ${T.players} SET avatar_filename = ?, updated_at = NOW() WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL`,
+    [relativeFilename, playerId]
+  );
+  if (changes === 0) throw new UserFacingError('Necesitas un personaje vivo para cambiar la foto.');
+  const player = await queryOne(SQL.getById, [playerId]);
+  await logAction({ ...actorFields(actor), action: 'perfil.foto', target: player.discord_id, details: { avatar: relativeFilename } });
+  return player;
+}
+
 export async function updateIdentity(playerId, fields, actor) {
   assertPlayerId(playerId);
   const { sets, params } = validateIdentity(fields ?? {});

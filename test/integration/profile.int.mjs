@@ -261,3 +261,12 @@ test('revivir devuelve la vida, no los bienes', async () => {
   await assert.rejects(() => lifecycle.reviveCharacter(player.discord_id, ACTOR), /ya está vivo/);
   assert.equal((await profile.requireLivingPlayer(player.discord_id)).id, player.id);
 });
+
+test('setAvatar actualiza la foto de un personaje vivo y rechaza nombres raros', async () => {
+  const p = await createCharacter(db, T);
+  const updated = await profile.setAvatar(p.id, 'avatars/player_123_1700000000.png', ACTOR);
+  assert.equal(updated.avatar_filename, 'avatars/player_123_1700000000.png');
+  await assert.rejects(profile.setAvatar(p.id, '../../etc/passwd', ACTOR), /no válido/);
+  const dead = await createCharacter(db, T, { isAlive: false });
+  await assert.rejects(profile.setAvatar(dead.id, 'avatars/x.png', ACTOR), /personaje vivo/);
+});
