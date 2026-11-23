@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { schemaForMigrationFile } from '../src/database/migrate.js';
 
 const MIGRATIONS_DIR = new URL('../src/database/migrations/mysql/', import.meta.url);
@@ -37,4 +37,15 @@ test('rechaza nombres que no casan', () => {
   ]) {
     assert.throws(() => schemaForMigrationFile(bad), /no válido/, bad);
   }
+});
+
+test('035 respeta un cooldown de creación ya fijado distinto de 0', () => {
+  const sql = readFileSync(new URL('035_rp_players_profile.sql', MIGRATIONS_DIR), 'utf-8');
+  assert.match(sql, /ON DUPLICATE KEY UPDATE value = IF\(value = '0', '336', value\)/);
+});
+
+test('migrate.js serializa con GET_LOCK y libera en finally', () => {
+  const source = readFileSync(new URL('../src/database/migrate.js', import.meta.url), 'utf-8');
+  assert.match(source, /GET_LOCK/);
+  assert.match(source, /finally[\s\S]*RELEASE_LOCK[\s\S]*conn\.end\(\)/);
 });

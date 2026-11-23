@@ -28,6 +28,20 @@ FROM (
     FROM rp_players.faction_storage fs
     JOIN rp_players.factions f ON f.id = fs.faction_id
     WHERE f.owner_player_id IS NOT NULL
+    UNION ALL
+    SELECT n.owner_player_id, n.equipped_tool_item_id, 1
+    FROM npcs n
+    WHERE n.owner_player_id IS NOT NULL AND n.equipped_tool_item_id IS NOT NULL
+    UNION ALL
+    SELECT c.built_by_player_id, ml.item_id, ml.stock_quantity
+    FROM rp_economy.construction_market_listings ml
+    JOIN constructions c ON c.id = ml.construction_id
+    WHERE c.built_by_player_id IS NOT NULL
+    UNION ALL
+    SELECT c.built_by_player_id, ct.fuel_item_id, c.fuel_level
+    FROM constructions c
+    JOIN construction_types ct ON ct.id = c.construction_type_id
+    WHERE c.built_by_player_id IS NOT NULL AND ct.fuel_item_id IS NOT NULL
 ) s
 JOIN rp_players.players p ON p.id = s.player_id
 JOIN rp_economy.items i ON i.id = s.item_id
@@ -35,7 +49,7 @@ GROUP BY s.player_id, s.item_id
 HAVING SUM(s.quantity) > 0
 ON DUPLICATE KEY UPDATE quantity = rp_economy.inventory.quantity + VALUES(quantity);
 
-DELETE FROM constructions WHERE built_by_player_id IS NULL OR construction_type_id IS NULL;
+DELETE FROM constructions WHERE built_by_player_id IS NULL OR construction_type_id IS NULL OR built_by_player_id NOT IN (SELECT id FROM rp_players.players);
 
 SET @sql = (SELECT CONCAT('ALTER TABLE constructions DROP FOREIGN KEY `', CONSTRAINT_NAME, '`') FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'constructions' AND COLUMN_NAME = 'tile_id' AND REFERENCED_TABLE_NAME = 'map_tiles' LIMIT 1);
 SET @sql = IFNULL(@sql, 'DO 0');
