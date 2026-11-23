@@ -23,6 +23,8 @@ mock.module('../src/utils/interactionContext.js', {
     callerIsRolepriest: async () => state.rolepriest,
     requireLivingCharacter: async () => ({ id: 9, discord_id: 'mentor9' }),
     requireTargetCharacter: async () => ({ id: 5, discord_id: 'player5' }),
+    requireOtherTarget: async () => ({ id: 5, discord_id: 'player5' }),
+    rejectSelfTarget: () => {},
     resolveViewTarget: async () => ({}),
   },
 });

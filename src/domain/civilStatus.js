@@ -5,9 +5,10 @@ const FORMS = {
 
 const NEUTRAL = { single: 'Soltero/a', married: 'Casado/a', widowed: 'Viudo/a' };
 
-export function civilStatusLabel({ active, lastEndReason, gender }) {
+export function civilStatusLabel({ active, lastEndReason, endedByPlayerId = null, playerId = null, gender }) {
   const forms = FORMS[gender] ?? NEUTRAL;
   if (active) return forms.married;
-  if (lastEndReason === 'viudedad') return forms.widowed;
+  const survivor = endedByPlayerId === null || endedByPlayerId !== playerId;
+  if (lastEndReason === 'viudedad' && survivor) return forms.widowed;
   return forms.single;
 }

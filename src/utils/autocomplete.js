@@ -13,7 +13,7 @@ const SQL = {
     SELECT i.id, i.display_name, inv.quantity
     FROM ${T.inventory} inv JOIN ${T.items} i ON i.id = inv.item_id
     JOIN ${T.players} p ON p.id = inv.player_id
-    WHERE p.discord_id = ? AND i.display_name LIKE ?
+    WHERE p.discord_id = ? AND i.is_active = 1 AND i.display_name LIKE ?
     ORDER BY i.display_name LIMIT ${MAX_CHOICES}
   `,
   ownNpcNames: `
@@ -48,9 +48,13 @@ function quantity(value) {
   return Number(value).toLocaleString('es-ES', { maximumFractionDigits: 2 });
 }
 
-export async function goodsTypeChoices(text) {
-  const rows = await searchGoodsTypes(text, MAX_CHOICES);
-  return rows.map(r => ({ name: clip(r.display_name), value: r.id }));
+function typeLabel(row) {
+  return clip(`${row.display_name}${row.is_active ? '' : ' (inactivo)'}`);
+}
+
+export async function goodsTypeChoices(text, options) {
+  const rows = await searchGoodsTypes(text, MAX_CHOICES, options);
+  return rows.map(r => ({ name: typeLabel(r), value: r.id }));
 }
 
 export async function ownGoodsChoices(discordId, text) {
@@ -63,9 +67,9 @@ export async function ownNpcNameChoices(discordId, text) {
   return rows.map(r => ({ name: clip(`${r.name} ×${r.total}`), value: r.name }));
 }
 
-export async function propertyTypeChoices(text) {
-  const rows = await searchPropertyTypes(text, MAX_CHOICES);
-  return rows.map(r => ({ name: clip(r.display_name), value: r.id }));
+export async function propertyTypeChoices(text, options) {
+  const rows = await searchPropertyTypes(text, MAX_CHOICES, options);
+  return rows.map(r => ({ name: typeLabel(r), value: r.id }));
 }
 
 export async function ownPropertyChoices(discordId, text) {

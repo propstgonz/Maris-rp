@@ -3,12 +3,11 @@ import { T } from '../database/tables.js';
 import logger from '../utils/logger.js';
 import { UserFacingError } from '../utils/errors.js';
 import { config } from '../utils/permissions.js';
-import { discordRelativeFromNow } from '../utils/embeds.js';
 import { STATS } from '../domain/picarda.js';
 import { getSetting, setSetting } from './settingsService.js';
-import { findPlayerById } from './playerService.js';
+import { findPlayerById, lockPlayersInTx } from './playerService.js';
 import { logAction } from './auditLogService.js';
-import { endMarriagesOnDeathInTx } from './marriageService.js';
+import { endMarriagesOnDeathInTx, findSpouseId, lockCoupleInTx } from './marriageService.js';
 import { cancelAllPendingForPlayerInTx } from './consentService.js';
 import {
   ensureModmailChannel,
@@ -23,6 +22,7 @@ const DEFAULT_CREATION_COOLDOWN_HOURS = 336;
 const CHARACTER_CREATED_ROLE_ID = config.roles?.characterCreated ?? null;
 const GENDERS = ['hombre', 'mujer'];
 const NAME_MAX = 80;
+const DEADLOCK_RETRIES = 3;
 const SYSTEM_ACTOR = { discordId: 'sistema', username: 'sistema', source: 'discord' };
 
 const SQL = {
@@ -35,9 +35,9 @@ const SQL = {
   `,
 
   getCooldownSecondsRemaining: `
-    SELECT TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(COALESCE(character_reset_at, died_at), INTERVAL ? HOUR)) AS seconds_remaining
+    SELECT TIMESTAMPDIFF(SECOND, NOW(), DATE_ADD(died_at, INTERVAL ? HOUR)) AS seconds_remaining
     FROM ${T.players}
-    WHERE discord_id = ? AND COALESCE(character_reset_at, died_at) IS NOT NULL
+    WHERE discord_id = ? AND died_at IS NOT NULL AND character_created_at IS NULL
   `,
 
   claimCreation: `
@@ -67,11 +67,17 @@ const SQL = {
   findExpired: `
     SELECT * FROM ${T.players}
     WHERE is_alive = 0
+      AND character_created_at IS NOT NULL
       AND died_at IS NOT NULL
       AND died_at <= DATE_SUB(NOW(), INTERVAL ${GRACE_PERIOD_DAYS} DAY)
   `,
 
-  claimDeath: `
+  graceExpired: `
+    SELECT id FROM ${T.players}
+    WHERE id = ? AND is_alive = 0 AND died_at <= DATE_SUB(NOW(), INTERVAL ${GRACE_PERIOD_DAYS} DAY)
+  `,
+
+  claimGrace: `
     UPDATE ${T.players}
     SET is_alive = 0, died_at = NOW(), updated_at = NOW()
     WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
@@ -81,6 +87,13 @@ const SQL = {
     UPDATE ${T.players}
     SET is_alive = 1, died_at = NULL, updated_at = NOW()
     WHERE discord_id = ? AND is_alive = 0 AND character_created_at IS NOT NULL
+  `,
+
+  claimReturn: `
+    UPDATE ${T.players}
+    SET is_alive = 1, died_at = NULL, updated_at = NOW()
+    WHERE discord_id = ? AND is_alive = 0 AND character_created_at IS NOT NULL
+      AND died_at > DATE_SUB(NOW(), INTERVAL ${GRACE_PERIOD_DAYS} DAY)
   `,
 
   snapshotPlayer: `
@@ -146,16 +159,12 @@ const SQL = {
         avatar_filename      = 'avatars/default.png',
         modmail_channel_id   = NULL,
         is_alive             = 1,
-        died_at              = NULL,
+        died_at              = COALESCE(died_at, NOW()),
         character_reset_at   = NOW(),
         updated_at           = NOW()
-    WHERE id = ? AND is_alive = 0
+    WHERE id = ? AND character_created_at IS NOT NULL
   `,
 };
-
-function actorFields(actor) {
-  return { source: actor.source, actorDiscordId: actor.discordId, actorUsername: actor.username };
-}
 
 function groupNpcs(rows) {
   const counts = new Map();
@@ -172,15 +181,13 @@ async function wipeHoldingsInTx(playerId) {
 }
 
 async function buildSnapshotInTx(playerId) {
-  const [player, npcs, goods, properties, schools, spouse] = await Promise.all([
-    queryOne(SQL.snapshotPlayer, [playerId]),
-    query(SQL.snapshotNpcs, [playerId]),
-    query(SQL.snapshotGoods, [playerId]),
-    query(SQL.snapshotProperties, [playerId]),
-    query(SQL.snapshotSchools, [playerId]),
-    queryOne(SQL.snapshotSpouse, [playerId]),
-  ]);
-  return {
+  const player = await queryOne(SQL.snapshotPlayer, [playerId]);
+  const npcs = await query(SQL.snapshotNpcs, [playerId]);
+  const goods = await query(SQL.snapshotGoods, [playerId]);
+  const properties = await query(SQL.snapshotProperties, [playerId]);
+  const schools = await query(SQL.snapshotSchools, [playerId]);
+  const spouse = await queryOne(SQL.snapshotSpouse, [playerId]);
+  const snapshot = {
     character: {
       name: player.character_name, age: player.age, gender: player.gender,
       race: player.race_slug, menhir: player.menhir_slug,
@@ -193,15 +200,30 @@ async function buildSnapshotInTx(playerId) {
     schools: schools.map(row => ({ slug: row.slug, rank: row.level_rank })),
     spouse: spouse ? { id: spouse.id, discordId: spouse.discord_id, characterName: spouse.character_name } : null,
   };
+  return { player, snapshot };
 }
 
-async function pruneOnePlayer(player) {
-  return withTransaction(async () => {
-    const { changes } = await execute(SQL.resetToBlank, [player.id]);
-    if (changes === 0) return false;
-    await wipeHoldingsInTx(player.id);
-    return true;
-  });
+async function finalizeDeathInTx(existing, spouseHint, require) {
+  const label = existing.character_name ?? existing.username;
+  await lockCoupleInTx(existing.id, spouseHint);
+  const [state] = await lockPlayersInTx([existing.id]);
+  if (!state?.character_created_at) {
+    throw new UserFacingError(state?.died_at
+      ? `${label} ya murió definitivamente.`
+      : `${existing.username} no tiene ningún personaje.`);
+  }
+  if (require === 'grace' && state.is_alive) {
+    throw new UserFacingError(`**${label}** sigue vivo — usa \`/kill\` para matarlo primero.`);
+  }
+  if (require === 'expired' && !(await queryOne(SQL.graceExpired, [existing.id]))) {
+    throw new UserFacingError(`**${label}** todavía está dentro de la gracia.`);
+  }
+  await cancelAllPendingForPlayerInTx(existing.id);
+  const { player, snapshot } = await buildSnapshotInTx(existing.id);
+  await wipeHoldingsInTx(existing.id);
+  await endMarriagesOnDeathInTx(existing.id);
+  await execute(SQL.resetToBlank, [existing.id]);
+  return { player: { ...player, is_alive: 0 }, snapshot, fromGrace: !state.is_alive };
 }
 
 function validateCreation({ characterName, age, gender, raceSlug }) {
@@ -229,6 +251,12 @@ function attachGuildExtras(guild, discordId, characterName) {
   }
 }
 
+function formatAvailableAt(secondsFromNow) {
+  return new Date(Date.now() + secondsFromNow * 1000).toLocaleString('es-ES', {
+    timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
 export async function hasCharacter(discordId) {
   const row = await queryOne(SQL.getByDiscordId, [discordId]);
   return Boolean(row?.character_created_at);
@@ -240,12 +268,21 @@ export async function getCharacterCreationCooldownHours() {
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_CREATION_COOLDOWN_HOURS;
 }
 
-export async function setCharacterCreationCooldownHours(hours) {
+export async function setCharacterCreationCooldownHours(hours, actor = SYSTEM_ACTOR) {
   if (!Number.isFinite(hours) || hours < 0) {
-    throw new Error('El cooldown debe ser un número de horas ≥ 0 (0 = desactivado).');
+    throw new UserFacingError('El cooldown debe ser un número de horas mayor o igual que 0 (0 = desactivado).');
   }
+  const previous = await getCharacterCreationCooldownHours();
   await setSetting('character_creation_cooldown_hours', String(hours));
   logger.info(`[CharacterLifecycle] Cooldown de creación de personaje fijado a ${hours}h.`);
+  await logAction({ actor, action: 'personaje.cooldown_creacion', details: { previous, hours } });
+}
+
+export async function getCreationWaitSeconds(discordId) {
+  const cooldownHours = await getCharacterCreationCooldownHours();
+  if (cooldownHours === 0) return 0;
+  const status = await queryOne(SQL.getCooldownSecondsRemaining, [cooldownHours, discordId]);
+  return Math.max(0, Number(status?.seconds_remaining ?? 0));
 }
 
 export async function createCharacter(discordId, username, fields, { guild = null } = {}) {
@@ -253,15 +290,12 @@ export async function createCharacter(discordId, username, fields, { guild = nul
   const race = await queryOne(SQL.getRaceBySlug, [fields.raceSlug]);
   if (!race) throw new UserFacingError('Esa raza no existe.');
 
-  const cooldownHours = await getCharacterCreationCooldownHours();
-  if (cooldownHours > 0) {
-    const status = await queryOne(SQL.getCooldownSecondsRemaining, [cooldownHours, discordId]);
-    if (status && status.seconds_remaining > 0) {
-      throw new UserFacingError(
-        `Todavía no puedes crear un personaje nuevo: podrás ${discordRelativeFromNow(status.seconds_remaining)} ` +
-        '(espera desde que terminó tu anterior personaje).'
-      );
-    }
+  const waitSeconds = await getCreationWaitSeconds(discordId);
+  if (waitSeconds > 0) {
+    throw new UserFacingError(
+      `Todavía no puedes crear un personaje nuevo: podrás a partir del ${formatAvailableAt(waitSeconds)} UTC ` +
+      '(la espera cuenta desde la muerte de tu anterior personaje).'
+    );
   }
 
   await execute(SQL.ensureRow, [discordId, username]);
@@ -274,7 +308,7 @@ export async function createCharacter(discordId, username, fields, { guild = nul
 
   logger.info(`[CharacterLifecycle] Personaje creado: "${characterName}" (${discordId})`);
   await logAction({
-    source: 'discord', actorDiscordId: discordId, actorUsername: username, action: 'personaje.creado',
+    actor: { source: 'discord', discordId, username }, action: 'personaje.creado',
     target: discordId, details: { characterName, age: fields.age, gender: fields.gender, raceSlug: fields.raceSlug },
   });
 
@@ -285,40 +319,49 @@ export async function createCharacter(discordId, username, fields, { guild = nul
 
 export async function relinkModmailChannel(discordId, channelId) {
   const player = await queryOne(SQL.getByDiscordId, [discordId]);
-  if (!player) throw new Error(`Jugador no encontrado: discord_id="${discordId}"`);
+  if (!player) throw new UserFacingError('Ese jugador no existe.');
   if (!player.character_created_at) {
-    throw new Error(`**${player.username}** no tiene ningún personaje creado — no hay a qué enlazar el canal.`);
+    throw new UserFacingError(`**${player.username}** no tiene ningún personaje creado — no hay a qué enlazar el canal.`);
   }
   await execute(SQL.setModmailChannel, [channelId, discordId]);
   logger.info(`[CharacterLifecycle] Canal de modmail de "${player.character_name}" (${discordId}) reenlazado a mano → ${channelId} (antes: ${player.modmail_channel_id ?? 'ninguno'})`);
   return queryOne(SQL.getByDiscordId, [discordId]);
 }
 
-export async function killCharacter(discordId, reason, actor = SYSTEM_ACTOR) {
+export async function killCharacter(discordId, reason, actor = SYSTEM_ACTOR, { require = null } = {}) {
   const existing = await queryOne(SQL.getByDiscordId, [discordId]);
   if (!existing) throw new UserFacingError('Ese jugador no existe.');
 
-  const snapshot = await withTransaction(async () => {
-    await cancelAllPendingForPlayerInTx(existing.id);
-    const claim = await execute(SQL.claimDeath, [existing.id]);
+  const spouseHint = await findSpouseId(existing.id);
+  const { player, snapshot, fromGrace } = await withTransaction(
+    () => finalizeDeathInTx(existing, spouseHint, require),
+    { retryOnDeadlock: DEADLOCK_RETRIES }
+  );
+
+  logger.info(`[CharacterLifecycle] Muerte definitiva: "${player.character_name}" (${discordId}, motivo: ${reason}${fromGrace ? ', desde la gracia' : ''})`);
+  await logAction({ actor, action: 'personaje.muerte', target: discordId, details: { reason, fromGrace, snapshot } });
+
+  return { player, snapshot, fromGrace };
+}
+
+export async function enterGraceDeath(discordId, reason, actor = SYSTEM_ACTOR) {
+  const existing = await queryOne(SQL.getByDiscordId, [discordId]);
+  if (!existing) throw new UserFacingError('Ese jugador no existe.');
+
+  await withTransaction(async () => {
+    await lockPlayersInTx([existing.id]);
+    const claim = await execute(SQL.claimGrace, [existing.id]);
     if (claim.changes === 0) {
       throw new UserFacingError(existing.character_created_at
         ? `${existing.character_name ?? existing.username} ya estaba muerto.`
         : `${existing.username} no tiene ningún personaje.`);
     }
-    const taken = await buildSnapshotInTx(existing.id);
-    await wipeHoldingsInTx(existing.id);
-    await endMarriagesOnDeathInTx(existing.id);
-    return taken;
-  });
+    await cancelAllPendingForPlayerInTx(existing.id);
+  }, { retryOnDeadlock: DEADLOCK_RETRIES });
 
-  logger.info(`[CharacterLifecycle] Personaje muerto: "${existing.character_name}" (${discordId}, motivo: ${reason})`);
-  await logAction({
-    ...actorFields(actor), action: 'personaje.muerte', target: discordId,
-    details: { reason, snapshot },
-  });
-
-  return { player: await queryOne(SQL.getByDiscordId, [discordId]), snapshot };
+  logger.info(`[CharacterLifecycle] Personaje en gracia: "${existing.character_name}" (${discordId}, motivo: ${reason})`);
+  await logAction({ actor, action: 'personaje.gracia', target: discordId, details: { reason } });
+  return queryOne(SQL.getByDiscordId, [discordId]);
 }
 
 export async function reviveCharacter(discordId, actor = SYSTEM_ACTOR) {
@@ -326,96 +369,90 @@ export async function reviveCharacter(discordId, actor = SYSTEM_ACTOR) {
   if (!existing) throw new UserFacingError('Ese jugador no existe.');
   const { changes } = await execute(SQL.claimRevive, [discordId]);
   if (changes === 0) {
-    throw new UserFacingError(existing.character_created_at && existing.is_alive
-      ? `${existing.character_name ?? existing.username} ya está vivo.`
+    if (existing.character_created_at) throw new UserFacingError(`${existing.character_name ?? existing.username} ya está vivo.`);
+    throw new UserFacingError(existing.died_at
+      ? `El personaje de ${existing.username} murió definitivamente y ya no se puede revivir.`
       : `${existing.username} no tiene ningún personaje que revivir.`);
   }
   logger.info(`[CharacterLifecycle] Personaje revivido: "${existing.character_name}" (${discordId})`);
-  await logAction({ ...actorFields(actor), action: 'personaje.revivido', target: discordId, details: {} });
+  await logAction({ actor, action: 'personaje.revivido', target: discordId, details: {} });
+  return queryOne(SQL.getByDiscordId, [discordId]);
+}
+
+export async function reviveOnReturn(discordId) {
+  const { changes } = await execute(SQL.claimReturn, [discordId]);
+  if (changes === 0) return null;
+  await logAction({ actor: SYSTEM_ACTOR, action: 'personaje.revivido', target: discordId, details: { reason: 'volvió al servidor' } });
   return queryOne(SQL.getByDiscordId, [discordId]);
 }
 
 export async function markDeceased(client, discordId, reason, { permadeath = false, actor = SYSTEM_ACTOR } = {}) {
-  const { player } = await killCharacter(discordId, reason, actor);
-
-  notifyDeath(client, player, reason, { permadeath })
-    .catch(err => logger.warn(`[CharacterLifecycle] No se pudo notificar la muerte por MD: ${err.message}`));
-
-  if (player.modmail_channel_id) {
-    const notice = buildDeathModmailNotice(player, reason, permadeath);
-    if (permadeath) {
-      closeModmailChannel(client, player.modmail_channel_id, notice)
-        .catch(err => logger.warn(`[CharacterLifecycle] No se pudo cerrar el canal de modmail: ${err.message}`));
-    } else {
-      notifyModmailChannel(client, player.modmail_channel_id, notice)
+  if (!permadeath) {
+    const player = await enterGraceDeath(discordId, reason, actor);
+    notifyDeath(client, player, reason, { permadeath: false })
+      .catch(err => logger.warn(`[CharacterLifecycle] No se pudo notificar la muerte por MD: ${err.message}`));
+    if (player.modmail_channel_id) {
+      notifyModmailChannel(client, player.modmail_channel_id, buildDeathModmailNotice(player, reason, false))
         .catch(err => logger.warn(`[CharacterLifecycle] No se pudo avisar en el canal de modmail: ${err.message}`));
     }
+    return player;
   }
 
-  if (permadeath) {
-    await pruneOnePlayer(player);
-    logger.info(`[CharacterLifecycle] Permadeath: "${player.character_name}" borrado de inmediato (${discordId}, motivo: ${reason})`);
+  const { player, fromGrace } = await killCharacter(discordId, reason, actor);
+  notifyDeath(client, player, reason, { permadeath: true })
+    .catch(err => logger.warn(`[CharacterLifecycle] No se pudo notificar la muerte por MD: ${err.message}`));
+  if (player.modmail_channel_id) {
+    closeModmailChannel(client, player.modmail_channel_id, buildDeathModmailNotice(player, reason, true))
+      .catch(err => logger.warn(`[CharacterLifecycle] No se pudo cerrar el canal de modmail: ${err.message}`));
   }
-
-  return player;
+  return { ...player, fromGrace };
 }
 
 export async function reviveByCharacterId(playersRowId, actor = SYSTEM_ACTOR) {
   const player = await findPlayerById(playersRowId);
-  if (!player) throw new Error(`No existe ningún personaje con ID **${playersRowId}**.`);
-  if (player.is_alive) {
-    throw new Error(`**${player.character_name ?? player.username}** ya está vivo.`);
+  if (!player) throw new UserFacingError(`No existe ningún personaje con ID **${playersRowId}**.`);
+  if (player.is_alive && player.character_created_at) {
+    throw new UserFacingError(`**${player.character_name ?? player.username}** ya está vivo.`);
   }
-  if (!player.character_created_at) {
-    throw new Error(
-      `El personaje con ID **${playersRowId}** ya no existe (venció la gracia de ${GRACE_PERIOD_DAYS} días ` +
-      `o fue permadeath) — no queda nada que revivir.`
-    );
-  }
-
   return reviveCharacter(player.discord_id, actor);
 }
 
 export async function pruneExpiredCharacters(client = null) {
   const expired = await query(SQL.findExpired);
+  let finalized = 0;
 
-  for (const player of expired) {
-    await pruneOnePlayer(player);
-    logger.info(
-      `[CharacterLifecycle] Personaje expirado y borrado: "${player.character_name}" ` +
-      `(discord_id: ${player.discord_id}, murió: ${player.died_at})`
-    );
+  for (const candidate of expired) {
+    try {
+      const { player } = await killCharacter(
+        candidate.discord_id, `pasaron los ${GRACE_PERIOD_DAYS} días de gracia`, SYSTEM_ACTOR, { require: 'expired' }
+      );
+      finalized++;
+      logger.info(`[CharacterLifecycle] Gracia vencida, muerte definitiva: "${player.character_name}" (discord_id: ${candidate.discord_id}, murió: ${candidate.died_at})`);
 
-    if (client && player.modmail_channel_id) {
-      closeModmailChannel(
-        client,
-        player.modmail_channel_id,
-        `Pasaron los ${GRACE_PERIOD_DAYS} días de gracia sin revivir a **${player.character_name}**. Este canal se va a borrar.`
-      ).catch(err => logger.warn(`[CharacterLifecycle] No se pudo cerrar el canal de modmail: ${err.message}`));
+      if (client && player.modmail_channel_id) {
+        closeModmailChannel(
+          client,
+          player.modmail_channel_id,
+          `Pasaron los ${GRACE_PERIOD_DAYS} días de gracia sin revivir a **${player.character_name}**. Este canal se va a borrar.`
+        ).catch(err => logger.warn(`[CharacterLifecycle] No se pudo cerrar el canal de modmail: ${err.message}`));
+      }
+    } catch (err) {
+      logger.warn(`[CharacterLifecycle] No se pudo finalizar a ${candidate.discord_id}: ${err.message}`);
     }
   }
 
-  return expired.length;
+  return finalized;
 }
 
-export async function finalizeGraceDeath(discordId, client = null) {
-  const player = await queryOne(SQL.getByDiscordId, [discordId]);
-  if (!player) throw new Error(`Jugador no encontrado: discord_id="${discordId}"`);
-  if (!player.character_created_at) {
-    throw new Error('No tiene ningún personaje — nada que finalizar.');
-  }
-  if (player.is_alive) {
-    throw new Error(`**${player.character_name}** sigue vivo — usa \`/kill\` para matarlo primero.`);
-  }
-
-  await pruneOnePlayer(player);
-  logger.info(`[CharacterLifecycle] Finalizado a mano por Staff: "${player.character_name}" (${discordId}), borrado inmediato (estaba en periodo de gracia).`);
+export async function finalizeGraceDeath(discordId, client = null, actor = SYSTEM_ACTOR) {
+  const { player } = await killCharacter(discordId, 'finalizado por un Rolepriest durante la gracia', actor, { require: 'grace' });
+  logger.info(`[CharacterLifecycle] Finalizado a mano: "${player.character_name}" (${discordId}), muerte definitiva inmediata.`);
 
   if (client && player.modmail_channel_id) {
     closeModmailChannel(
       client,
       player.modmail_channel_id,
-      `**${player.character_name}** — Staff ha finalizado el permadeath antes de que venciera la ventana de gracia. Este canal ya no hace falta y se va a borrar.`
+      `**${player.character_name}** — un Rolepriest ha finalizado la muerte antes de que venciera la ventana de gracia. Este canal ya no hace falta y se va a borrar.`
     ).catch(err => logger.warn(`[CharacterLifecycle] No se pudo cerrar el canal de modmail: ${err.message}`));
   }
 

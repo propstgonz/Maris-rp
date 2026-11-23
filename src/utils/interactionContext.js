@@ -37,3 +37,14 @@ export async function requireTargetCharacter(interaction, optionName = 'jugador'
   const user = interaction.options.getUser(optionName, true);
   return requireLivingCharacter(user.id, { self: user.id === interaction.user.id });
 }
+
+export function rejectSelfTarget(interaction, discordId) {
+  if (discordId === interaction.user.id) {
+    throw new UserFacingError('Un Rolepriest no puede aplicarse estos cambios a sí mismo: no se auto-rolea.');
+  }
+}
+
+export async function requireOtherTarget(interaction, optionName = 'jugador') {
+  rejectSelfTarget(interaction, interaction.options.getUser(optionName, true).id);
+  return requireTargetCharacter(interaction, optionName);
+}

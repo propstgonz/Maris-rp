@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { requireRolepriest } from '../../utils/permissions.js';
-import { actorFrom, requireTargetCharacter } from '../../utils/interactionContext.js';
+import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { ownNpcNameChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
 import { confirmAction, replyEphemeral, staffAutocomplete, targetDiscordId } from '../../utils/staffUi.js';
@@ -52,7 +52,7 @@ export default {
     const count = interaction.options.getInteger('cantidad', true);
 
     if (sub === 'alta') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const total = await addNpcs(player.id, name, count, actor);
       return replyEphemeral(interaction)({
         embeds: [buildSuccessEmbed('NPC dados de alta', `<@${player.discord_id}> recibe **${count}** × ${name}. Ahora tiene **${total}**.`)],
@@ -60,15 +60,15 @@ export default {
     }
 
     if (sub === 'baja') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const done = await confirmAction(interaction, `Dar de baja **${count}** × ${name} de <@${player.discord_id}>. No se puede deshacer.`);
       if (!done) return;
       const total = await removeNpcs(player.id, name, count, actor);
       return done({ embeds: [buildSuccessEmbed('NPC dados de baja', `<@${player.discord_id}> conserva **${total}** × ${name}.`)] });
     }
 
-    const from = await requireTargetCharacter(interaction, 'origen');
-    const to = await requireTargetCharacter(interaction, 'destino');
+    const from = await requireOtherTarget(interaction, 'origen');
+    const to = await requireOtherTarget(interaction, 'destino');
     await adminTransferNpcs(from.id, to.id, name, count, actor);
     return replyEphemeral(interaction)({
       embeds: [buildSuccessEmbed('NPC transferidos', `**${count}** × ${name} pasan de <@${from.discord_id}> a <@${to.discord_id}>.`)],

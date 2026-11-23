@@ -24,3 +24,13 @@ export async function listPlayers() {
 export async function findPlayerById(id) {
   return (await queryOne(SQL.findById, [id])) ?? null;
 }
+
+export async function lockPlayersInTx(ids) {
+  const unique = [...new Set(ids.filter(id => id != null).map(Number))].sort((a, b) => a - b);
+  if (unique.length === 0) return [];
+  return query(
+    `SELECT id, discord_id, is_alive, character_created_at, died_at FROM ${T.players}
+     WHERE id IN (${unique.map(() => '?').join(', ')}) ORDER BY id FOR UPDATE`,
+    unique
+  );
+}

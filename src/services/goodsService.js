@@ -10,6 +10,7 @@ const EMOJI_MAX = 32;
 const DESCRIPTION_MAX = 2000;
 const DEFAULT_TYPE_EMOJI = '📦';
 const DEFAULT_CATEGORY_EMOJI = '🏷️';
+const DEADLOCK_RETRIES = 3;
 
 const SQL = {
   listCategories: `SELECT id, name, display_name, emoji, description FROM ${T.item_categories} ORDER BY display_name ASC`,
@@ -22,7 +23,7 @@ const SQL = {
   `,
   insertType: `INSERT INTO ${T.items} (name, display_name, category_id, emoji, description) VALUES (?, ?, ?, ?, ?)`,
   setActive: `UPDATE ${T.items} SET is_active = ? WHERE id = ?`,
-  alivePlayer: `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1`,
+  alivePlayer: `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1 FOR UPDATE`,
   lockPlayers: `SELECT id, is_alive FROM ${T.players} WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`,
   upsert: `
     INSERT INTO ${T.inventory} (player_id, item_id, quantity) VALUES (?, ?, ?)
@@ -54,7 +55,7 @@ export function validateQuantity(quantity) {
   const q = Number(quantity);
   if (!Number.isFinite(q) || q <= 0) throw new UserFacingError('La cantidad debe ser mayor que 0.');
   if (q > MAX_QUANTITY) throw new UserFacingError('La cantidad es demasiado grande.');
-  if (Math.abs(q * 100 - Math.round(q * 100)) > 1e-6) throw new UserFacingError('La cantidad admite como mucho 2 decimales.');
+  if (Math.abs(q * 100 - Math.round(q * 100)) > 1e-6 * Math.max(1, Math.abs(q))) throw new UserFacingError('La cantidad admite como mucho 2 decimales.');
   return Math.round(q * 100) / 100;
 }
 
@@ -64,10 +65,6 @@ function _isDuplicate(err) {
 
 function _isOutOfRange(err) {
   return err?.code === 'ER_WARN_DATA_OUT_OF_RANGE' || err?.errno === 1264;
-}
-
-function _isDeadlock(err) {
-  return err?.code === 'ER_LOCK_DEADLOCK';
 }
 
 function _mapType(row) {
@@ -117,14 +114,7 @@ async function _takeInTx(ownerId, itemId, quantity) {
 }
 
 function _audit(actor, action, target, details) {
-  return logAction({
-    source: actor.source,
-    actorDiscordId: actor.discordId,
-    actorUsername: actor.username,
-    action,
-    target,
-    details,
-  });
+  return logAction({ actor, action, target, details });
 }
 
 export async function listCategories() {
@@ -163,11 +153,12 @@ export async function findTypeByName(name) {
   return _mapType(await queryOne(`${SQL.typeSelect} WHERE i.name = ? OR i.display_name = ? LIMIT 1`, [text, text]));
 }
 
-export async function searchTypes(text, limit = 25) {
+export async function searchTypes(text, limit = 25, { onlyInactive = false, includeInactive = false } = {}) {
   const like = `%${String(text ?? '').trim().replace(/[\\%_]/g, c => `\\${c}`)}%`;
   const safeLimit = Math.min(_positiveInt(limit, 25), 100);
+  const activity = includeInactive ? '1 = 1' : `i.is_active = ${onlyInactive ? 0 : 1}`;
   const rows = await query(
-    `${SQL.typeSelect} WHERE i.is_active = 1 AND (i.display_name LIKE ? ESCAPE '\\\\' OR i.name LIKE ? ESCAPE '\\\\')
+    `${SQL.typeSelect} WHERE ${activity} AND (i.display_name LIKE ? ESCAPE '\\\\' OR i.name LIKE ? ESCAPE '\\\\')
      ORDER BY i.display_name ASC LIMIT ${safeLimit}`,
     [like, like]
   );
@@ -230,7 +221,7 @@ export async function listInventory(ownerId, { page = 1, pageSize = 10 } = {}) {
   const safePageSize = Math.min(_positiveInt(pageSize, 10), 100);
   const offset = (_positiveInt(page, 1) - 1) * safePageSize;
   const rows = await query(
-    `SELECT inv.item_id, i.display_name, i.emoji, c.display_name AS category, inv.quantity
+    `SELECT inv.item_id, i.display_name, i.emoji, i.is_active, c.display_name AS category, inv.quantity
      FROM ${T.inventory} inv
      JOIN ${T.items} i ON i.id = inv.item_id
      LEFT JOIN ${T.item_categories} c ON c.id = i.category_id
@@ -280,13 +271,7 @@ export async function transferGoodsInTx(fromId, toId, itemId, quantity) {
 }
 
 export async function adminTransferGoods(fromId, toId, itemId, quantity, actor) {
-  let result;
-  try {
-    result = await withTransaction(() => transferGoodsInTx(fromId, toId, itemId, quantity));
-  } catch (err) {
-    if (_isDeadlock(err)) throw new UserFacingError('Otra operación está tocando esos bienes. Inténtalo de nuevo.');
-    throw err;
-  }
+  const result = await withTransaction(() => transferGoodsInTx(fromId, toId, itemId, quantity), { retryOnDeadlock: DEADLOCK_RETRIES });
   await _audit(actor, 'bienes.traspaso', String(fromId), { toId, itemId, item: result.item, quantity: result.quantity });
   return result;
 }

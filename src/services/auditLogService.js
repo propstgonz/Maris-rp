@@ -16,16 +16,20 @@ const SQL = {
   `,
   getMaxId: `SELECT MAX(id) AS maxId FROM ${T.audit_log}`,
   pruneOlderThan: `
-    DELETE FROM ${T.audit_log} WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
+    DELETE FROM ${T.audit_log}
+    WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) AND action <> 'personaje.muerte'
   `,
 };
 
-export async function logAction({ source, actorDiscordId, actorUsername, action, target = null, details = null }) {
+export async function logAction({ actor, source, actorDiscordId, actorUsername, action, target = null, details = null }) {
+  const entrySource = actor?.source ?? source;
+  const entryDiscordId = actor?.discordId ?? actorDiscordId;
+  const entryUsername = actor?.username ?? actorUsername;
   try {
     const detailsStr = details == null ? null : JSON.stringify(details);
-    await execute(SQL.insert, [source, actorDiscordId, actorUsername, action, target, detailsStr]);
+    await execute(SQL.insert, [entrySource, entryDiscordId, entryUsername, action, target, detailsStr]);
   } catch (err) {
-    logger.warn(`[AuditLog] No se pudo registrar la acción "${action}" (${source}, ${actorUsername}): ${err.message}`);
+    logger.warn(`[AuditLog] No se pudo registrar la acción "${action}" (${entrySource}, ${entryUsername}): ${err.message}`);
   }
 }
 

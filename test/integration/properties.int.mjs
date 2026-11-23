@@ -58,10 +58,10 @@ test('otorgar, listar paginado, nivel y revocar', async () => {
   assert.equal((await svc.setLevel(f.id, 5, ACTOR)).level, 5);
   await assert.rejects(() => svc.setLevel(f.id, 1001, ACTOR), /nivel/);
 
-  const gone = await svc.revokeProperty(f.id, ACTOR);
+  const gone = await svc.revokeProperty(f.id, bob.id, ACTOR);
   assert.equal(gone.id, f.id);
   assert.equal(await svc.getProperty(f.id), null);
-  await assert.rejects(() => svc.revokeProperty(f.id, ACTOR), /no existe/);
+  await assert.rejects(() => svc.revokeProperty(f.id, bob.id, ACTOR), /no existe/);
 });
 
 test('traspaso: dueño equivocado y destino muerto fallan', async () => {
@@ -97,7 +97,7 @@ test('carrera: revocar y traspasar a la vez', async () => {
   const type = await newType('Carrera Revoca');
   const prop = await svc.grantProperty(alice.id, type.id, {}, ACTOR);
   const results = await Promise.allSettled([
-    svc.revokeProperty(prop.id, ACTOR),
+    svc.revokeProperty(prop.id, alice.id, ACTOR),
     db.withTransaction(() => svc.transferPropertyInTx(alice.id, bob.id, prop.id)),
   ]);
   const rows = await db.query(`SELECT owner_player_id FROM ${T.properties} WHERE id = ?`, [prop.id]);
@@ -107,4 +107,23 @@ test('carrera: revocar y traspasar a la vez', async () => {
     assert.equal(rows[0].owner_player_id, bob.id);
     assert.equal(results[0].status, 'rejected');
   }
+});
+
+test('revocar con el dueño cambiado entre la confirmación y el borrado falla con un error claro', async () => {
+  const type = await newType('Dueño Cambia');
+  const prop = await svc.grantProperty(alice.id, type.id, {}, ACTOR);
+  await svc.adminTransferProperty(prop.id, bob.id, ACTOR);
+  await assert.rejects(() => svc.revokeProperty(prop.id, alice.id, ACTOR), /cambiado de dueño/);
+  assert.equal((await svc.getProperty(prop.id)).owner_player_id, bob.id);
+  assert.equal((await svc.revokeProperty(prop.id, bob.id, ACTOR)).id, prop.id);
+});
+
+test('searchTypes: activos por defecto, solo inactivos o todos', async () => {
+  const active = await newType('Busqueda Activa');
+  const inactive = await newType('Busqueda Inactiva');
+  await svc.setTypeActive(inactive.id, false, ACTOR);
+  const ids = rows => rows.map(r => r.id);
+  assert.deepEqual(ids(await svc.searchTypes('Busqueda')), [active.id]);
+  assert.deepEqual(ids(await svc.searchTypes('Busqueda', 25, { onlyInactive: true })), [inactive.id]);
+  assert.deepEqual(ids(await svc.searchTypes('Busqueda', 25, { includeInactive: true })).sort(), [active.id, inactive.id].sort());
 });

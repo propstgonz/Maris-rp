@@ -57,7 +57,7 @@ const SQL = {
   `,
   setMenhir: `
     UPDATE ${T.players}
-    SET menhir_id = ?, menhir_chosen_at = NOW(), updated_at = NOW()
+    SET menhir_chosen_at = IF(menhir_id IS NULL, NOW(), menhir_chosen_at), menhir_id = ?, updated_at = NOW()
     WHERE id = ? AND is_alive = 1
   `,
   clearMenhir: `
@@ -72,10 +72,6 @@ const SQL = {
   },
   insertRegistry: `INSERT INTO ${T.character_registry} (discord_id, character_name) VALUES (?, ?)`,
 };
-
-function actorFields(actor) {
-  return { source: actor.source, actorDiscordId: actor.discordId, actorUsername: actor.username };
-}
 
 function assertPlayerId(playerId) {
   if (!Number.isInteger(playerId) || playerId < 1) throw new UserFacingError('Jugador no válido.');
@@ -106,17 +102,6 @@ async function requireMenhir(menhirSlug) {
 
 function formatDate(date) {
   return date.toLocaleDateString('es-ES', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-export async function requireLivingPlayer(discordId) {
-  const player = await queryOne(SQL.getByDiscordId, [discordId]);
-  if (!player?.character_created_at) {
-    throw new UserFacingError('No tienes ningún personaje. Crea uno con `/personaje crear`.');
-  }
-  if (!player.is_alive) {
-    throw new UserFacingError('Tu personaje ha muerto. Cuando pase la espera podrás crear otro con `/personaje crear`.');
-  }
-  return player;
 }
 
 export async function listRaces() {
@@ -163,7 +148,7 @@ export async function allocateStat(playerId, stat, n, actor) {
   }
 
   await logAction({
-    ...actorFields(actor), action: 'perfil.stat_asignada', target: player.discord_id,
+    actor, action: 'perfil.stat_asignada', target: player.discord_id,
     details: { stat, points: n, value: baseStats(player)[stat], freePoints: freePoints(player) },
   });
   return player;
@@ -182,7 +167,7 @@ export async function grantBonusPoints(playerId, n, actor) {
       : 'Ese jugador no tiene un personaje vivo.');
   }
   await logAction({
-    ...actorFields(actor), action: 'perfil.puntos_extra', target: player.discord_id,
+    actor, action: 'perfil.puntos_extra', target: player.discord_id,
     details: { granted: n, bonusPoints: player.stat_bonus_points },
   });
   return player;
@@ -203,7 +188,7 @@ export async function correctStat(playerId, stat, value, actor) {
   }
   const player = await requirePlayerById(playerId);
   await logAction({
-    ...actorFields(actor), action: 'perfil.stat_corregida', target: player.discord_id,
+    actor, action: 'perfil.stat_corregida', target: player.discord_id,
     details: { stat, from: baseStats(before)[stat], to: value },
   });
   return player;
@@ -216,7 +201,7 @@ export async function setRace(playerId, raceSlug, actor) {
   const { changes } = await execute(SQL.setRace, [race.id, playerId]);
   if (changes === 0) throw new UserFacingError('Ese jugador no tiene un personaje vivo.');
   await logAction({
-    ...actorFields(actor), action: 'perfil.raza_fijada', target: before.discord_id,
+    actor, action: 'perfil.raza_fijada', target: before.discord_id,
     details: { raceSlug, previousRaceId: before.race_id },
   });
   return queryOne(SQL.getById, [playerId]);
@@ -238,7 +223,7 @@ export async function chooseMenhir(playerId, menhirSlug, actor) {
     throw new UserFacingError('No se pudo elegir el menhir. Inténtalo de nuevo.');
   }
   await logAction({
-    ...actorFields(actor), action: 'perfil.menhir_elegido', target: player.discord_id,
+    actor, action: 'perfil.menhir_elegido', target: player.discord_id,
     details: { menhirSlug },
   });
   return player;
@@ -253,7 +238,7 @@ export async function setMenhir(playerId, menhirSlug, actor) {
     : await execute(SQL.clearMenhir, [playerId]);
   if (changes === 0) throw new UserFacingError('Ese jugador no tiene un personaje vivo.');
   await logAction({
-    ...actorFields(actor), action: 'perfil.menhir_fijado', target: before.discord_id,
+    actor, action: 'perfil.menhir_fijado', target: before.discord_id,
     details: { menhirSlug, previousMenhirId: before.menhir_id },
   });
   return queryOne(SQL.getById, [playerId]);
@@ -295,7 +280,7 @@ export async function setAvatar(playerId, relativeFilename, actor) {
   );
   if (changes === 0) throw new UserFacingError('Necesitas un personaje vivo para cambiar la foto.');
   const player = await queryOne(SQL.getById, [playerId]);
-  await logAction({ ...actorFields(actor), action: 'perfil.foto', target: player.discord_id, details: { avatar: relativeFilename } });
+  await logAction({ actor, action: 'perfil.foto', target: player.discord_id, details: { avatar: relativeFilename } });
   return player;
 }
 
@@ -317,7 +302,7 @@ export async function updateIdentity(playerId, fields, actor) {
 
   const player = await queryOne(SQL.getById, [playerId]);
   await logAction({
-    ...actorFields(actor), action: 'perfil.identidad_editada', target: before.discord_id,
+    actor, action: 'perfil.identidad_editada', target: before.discord_id,
     details: {
       characterName: [before.character_name, player.character_name],
       age: [before.age, player.age],

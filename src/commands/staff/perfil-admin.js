@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { requireRolepriest } from '../../utils/permissions.js';
-import { actorFrom, requireTargetCharacter } from '../../utils/interactionContext.js';
+import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { raceChoices, menhirChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
 import { confirmAction, replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
@@ -75,14 +75,14 @@ export default {
 
     if (sub === 'cooldown-creacion') {
       const hours = interaction.options.getNumber('horas');
-      if (hours !== null) await setCharacterCreationCooldownHours(hours);
+      if (hours !== null) await setCharacterCreationCooldownHours(hours, actor);
       const current = await getCharacterCreationCooldownHours();
       return replyEphemeral(interaction)({
         embeds: [buildSuccessEmbed('Cooldown de creación', `Espera actual: **${current} h**${current === 0 ? ' (desactivada)' : ''}.`)],
       });
     }
 
-    const player = await requireTargetCharacter(interaction);
+    const player = await requireOtherTarget(interaction);
     const mention = `<@${player.discord_id}>`;
 
     if (sub === 'raza') {

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { requireRolepriest } from '../../utils/permissions.js';
-import { actorFrom, requireTargetCharacter } from '../../utils/interactionContext.js';
+import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { goodsTypeChoices, ownGoodsChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
 import { confirmAction, paginate, replyEphemeral, staffAutocomplete, targetDiscordId, includesText, withDefined } from '../../utils/staffUi.js';
@@ -19,13 +19,6 @@ const userOption = (name, description) => opt => opt.setName(name).setDescriptio
 const categoryOption = opt => opt.setName('categoria').setDescription('Categoría').setAutocomplete(true);
 const emojiOption = opt => opt.setName('emoji').setDescription('Emoji').setMaxLength(32);
 const descriptionOption = opt => opt.setName('descripcion').setDescription('Descripción').setMaxLength(2000);
-
-function typeChoices(types, text) {
-  return types
-    .filter(t => includesText(text, t.display_name, t.name))
-    .slice(0, MAX_CHOICES)
-    .map(t => ({ name: `${t.display_name}${t.is_active ? '' : ' (inactivo)'}`.slice(0, MAX_NAME), value: t.id }));
-}
 
 export default {
   permission: 'rolepriest',
@@ -90,9 +83,10 @@ export default {
       .filter(c => includesText(text, c.display_name, c.name))
       .slice(0, MAX_CHOICES)
       .map(c => ({ name: c.display_name.slice(0, MAX_NAME), value: c.display_name })),
-    tipo: async (text, interaction) => {
-      const types = await listTypes({ includeInactive: true });
-      return typeChoices(interaction.options.getSubcommand() === 'tipo-activar' ? types.filter(t => !t.is_active) : types, text);
+    tipo: (text, interaction) => {
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'tipo-activar') return goodsTypeChoices(text, { onlyInactive: true });
+      return goodsTypeChoices(text, sub === 'tipo-editar' ? { includeInactive: true } : undefined);
     },
     objeto: (text, interaction) => {
       const sub = interaction.options.getSubcommand();
@@ -148,13 +142,13 @@ export default {
     const quantity = interaction.options.getNumber('cantidad', true);
 
     if (sub === 'dar') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const total = await addGoods(player.id, itemId, quantity, actor);
       return reply({ embeds: [buildSuccessEmbed('Bienes entregados', `<@${player.discord_id}> recibe **${quantity}**. Ahora tiene **${total}**.`)] });
     }
 
     if (sub === 'quitar') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const type = (await listTypes({ includeInactive: true })).find(t => t.id === itemId);
       const done = await confirmAction(interaction, `Quitar **${quantity}** × ${type?.display_name ?? `bien #${itemId}`} a <@${player.discord_id}>. No se puede deshacer.`);
       if (!done) return;
@@ -162,8 +156,8 @@ export default {
       return done({ embeds: [buildSuccessEmbed('Bienes retirados', `<@${player.discord_id}> conserva **${left}**.`)] });
     }
 
-    const from = await requireTargetCharacter(interaction, 'origen');
-    const to = await requireTargetCharacter(interaction, 'destino');
+    const from = await requireOtherTarget(interaction, 'origen');
+    const to = await requireOtherTarget(interaction, 'destino');
     const moved = await adminTransferGoods(from.id, to.id, itemId, quantity, actor);
     return reply({
       embeds: [buildSuccessEmbed('Bienes transferidos', `**${moved.quantity}** × ${moved.displayName} pasan de <@${from.discord_id}> a <@${to.discord_id}>.`)],
