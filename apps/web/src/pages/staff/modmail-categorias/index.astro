@@ -2,6 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
+import { formatFull, parseUtc } from '../../../lib/dates';
 import { fetchModmailCategories, ApiError } from '../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
@@ -48,7 +49,7 @@ try {
                 <tr>
                   <td>{c.exists ? `#${c.displayName}` : <><s>{c.displayName}</s> <span class="hint">(ya no existe en Discord)</span></>}</td>
                   <td>{c.channelCount}/{c.maxChannels}{c.channelCount >= c.maxChannels ? ' LLENA' : ''}</td>
-                  <td>{new Date(c.createdAt).toLocaleString('es-ES')}</td>
+                  <td>{formatFull(parseUtc(c.createdAt))}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,4 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, MessageFlags } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, MessageFlags } from 'discord.js';
+import { COLORS } from '../utils/embeds.js';
 
 export const FLOW_TIMEOUT_MS = 60_000;
 
@@ -21,7 +22,19 @@ export async function awaitFrom(message, interaction, componentType, time = FLOW
   }
 }
 
-export async function confirmAction(interaction, { embed, confirmLabel = 'Confirmar', danger = false }) {
+function normalizeConfirmSpec(spec) {
+  if (typeof spec === 'string') {
+    return {
+      embed: new EmbedBuilder().setColor(COLORS.YELLOW).setTitle('⚠️ Confirma la acción').setDescription(spec),
+      danger: true,
+    };
+  }
+  if (spec instanceof EmbedBuilder) return { embed: spec };
+  return spec;
+}
+
+export async function confirmAction(interaction, spec) {
+  const { embed, confirmLabel = 'Confirmar', danger = false } = normalizeConfirmSpec(spec);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`ok-${interaction.id}`)

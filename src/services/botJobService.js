@@ -1,9 +1,7 @@
 import { queryOne, execute } from '../database/index.js';
 import { T } from '../database/tables.js';
 import logger from '../utils/logger.js';
-import { UserFacingError } from '../utils/errors.js';
 import { startGuardedInterval } from '../utils/guardedInterval.js';
-import { markDeceased, finalizeGraceDeath } from './characterLifecycleService.js';
 import { listPlayersWithChannel, postCharacterInfoCard } from './modmailService.js';
 import { getPlayerByDiscordId } from './playerService.js';
 import { createAndRegisterCategory } from './modmailCategoryService.js';
@@ -33,39 +31,7 @@ export async function getJobResult(id) {
   return { ...row, payload: JSON.parse(row.payload) };
 }
 
-const DEFAULT_POLL_TIMEOUT_MS = 12_000;
-const DEFAULT_POLL_INTERVAL_MS = 300;
-
-export async function enqueueJobAndAwait(jobType, payload, requestedByDiscordId, { timeoutMs = DEFAULT_POLL_TIMEOUT_MS, intervalMs = DEFAULT_POLL_INTERVAL_MS } = {}) {
-  const jobId = await enqueueJob(jobType, payload, requestedByDiscordId);
-
-  const deadline = Date.now() + timeoutMs;
-  let job = await getJobResult(jobId);
-  while (job?.status === 'pending' && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
-    job = await getJobResult(jobId);
-  }
-
-  if (!job || job.status === 'pending') {
-    throw new UserFacingError('El bot está tardando más de lo normal en procesar esto — inténtalo de nuevo en un momento.');
-  }
-  if (job.status === 'error') {
-    throw new UserFacingError(job.result_text);
-  }
-  return JSON.parse(job.result_text);
-}
-
 const handlers = {
-  async 'player.kill'(client, payload) {
-    const { discordId, reason } = payload;
-    const updated = await markDeceased(client, discordId, reason, { permadeath: true });
-    return JSON.stringify(updated);
-  },
-  async 'player.finalize_grace'(client, payload) {
-    const { discordId } = payload;
-    const updated = await finalizeGraceDeath(discordId, client);
-    return JSON.stringify(updated);
-  },
   async 'channels.sync_identity_cards'(client) {
     const players = await listPlayersWithChannel();
     let posted = 0, skipped = 0, errors = 0;

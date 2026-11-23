@@ -2,7 +2,7 @@ import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
 import tailwindcss from '@tailwindcss/vite';
 
-const MAP_SERVER_INTERNAL_URL = (process.env.MAP_SERVER_INTERNAL_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+const API_INTERNAL_URL = (process.env.API_INTERNAL_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
 export default defineConfig({
   output: 'server',
@@ -11,9 +11,9 @@ export default defineConfig({
     plugins: [tailwindcss()],
     server: {
       proxy: {
-        '/auth':   MAP_SERVER_INTERNAL_URL,
-        '/api':    MAP_SERVER_INTERNAL_URL,
-        '/static': MAP_SERVER_INTERNAL_URL,
+        '/auth':   API_INTERNAL_URL,
+        '/api':    API_INTERNAL_URL,
+        '/static': API_INTERNAL_URL,
       },
     },
   },

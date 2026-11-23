@@ -53,15 +53,6 @@ export interface AuditLogPage {
   pageSize: number;
 }
 
-export function fetchAuditLog(Astro: AstroGlobal, params: { page?: number; actor?: string; action?: string } = {}): Promise<AuditLogPage> {
-  const qs = new URLSearchParams();
-  if (params.page) qs.set('page', String(params.page));
-  if (params.actor) qs.set('actor', params.actor);
-  if (params.action) qs.set('action', params.action);
-  const query = qs.toString();
-  return getJson<AuditLogPage>(Astro, `/api/audit-log${query ? `?${query}` : ''}`);
-}
-
 export function fetchAuditLogActions(Astro: AstroGlobal): Promise<string[]> {
   return getJson<string[]>(Astro, '/api/audit-log/actions');
 }

@@ -2,6 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { icon } from '../../../lib/icons';
 import { requireRolepriest } from '../../../lib/auth';
+import { formatFull, parseUtc } from '../../../lib/dates';
 import { fetchBackups, fetchBackupSchedule, ApiError } from '../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
@@ -93,7 +94,7 @@ const KIND_LABELS: Record<string, string> = {
             <tbody>
               {backups.map(b => (
                 <tr>
-                  <td>{new Date(b.createdAt).toLocaleString('es-ES')}</td>
+                  <td>{formatFull(parseUtc(b.createdAt))}</td>
                   <td>{KIND_LABELS[b.kind] ?? b.filename}</td>
                   <td><code>{formatSize(b.sizeBytes)}</code></td>
                   <td class="row-actions">

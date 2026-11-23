@@ -2,14 +2,11 @@ import { escapeHtml, escapeAttr } from './html';
 import { apiFetch } from './api';
 import { initLiveUpdates } from './liveUpdates';
 import { icon } from '../lib/icons';
+import { parseUtc, formatFull } from '../lib/dates';
 import { actionPhrase, summarizeDetails, relativeTime } from '../lib/auditActions';
 import type { AuditLogPage, AuditLogEntry } from '../lib/apiClient';
 
 const SEARCH_DEBOUNCE_MS = 300;
-
-function parseUtc(created: string): Date {
-  return new Date(`${created.replace(' ', 'T')}Z`);
-}
 
 export function initAuditLog(root: HTMLElement) {
   const tableContainer = root.querySelector<HTMLElement>('[data-log-table]')!;
@@ -53,7 +50,7 @@ export function initAuditLog(root: HTMLElement) {
         <p class="log-entry-title"><img class="player-avatar log-entry-avatar" src="/api/discord-avatar/${encodeURIComponent(row.actor_discord_id)}" alt="" loading="lazy"><b>${escapeHtml(row.actor_username)}</b> ${escapeHtml(actionPhrase(row.action))} ${target}</p>
         <p class="log-entry-meta">
           <span title="${escapeAttr(row.source === 'web' ? 'Hecho desde la web' : 'Hecho desde Discord')}">${sourceLabel}</span>
-          <span title="${escapeAttr(when.toLocaleString('es-ES'))}">${escapeHtml(relativeTime(when))}</span>
+          <span title="${escapeAttr(formatFull(when))}">${escapeHtml(relativeTime(when))}</span>
           <code>${escapeHtml(row.action)}</code>
         </p>
         ${summary ? `<p class="log-entry-detail">${escapeHtml(summary)}</p>` : ''}
@@ -62,7 +59,7 @@ export function initAuditLog(root: HTMLElement) {
   }
 
   function rawRowHtml(row: AuditLogEntry): string {
-    const when = parseUtc(row.created_at).toLocaleString('es-ES');
+    const when = formatFull(parseUtc(row.created_at));
     const details = row.details == null ? '—' : JSON.stringify(row.details);
     return `<tr>
       <td title="${row.source === 'web' ? 'Desde la web' : 'Desde Discord'}">${row.source === 'web' ? 'Web' : 'Discord'}</td>

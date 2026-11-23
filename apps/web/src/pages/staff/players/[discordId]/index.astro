@@ -2,6 +2,7 @@
 import BaseLayout from '../../../../layouts/BaseLayout.astro';
 import { icon } from '../../../../lib/icons';
 import { requireRolepriest } from '../../../../lib/auth';
+import { formatDateTime, parseUtc } from '../../../../lib/dates';
 import { fetchFicha, ApiError, type Ficha, type FichaGood, type FichaSpell, type StatMap } from '../../../../lib/apiClient';
 
 const guard = requireRolepriest(Astro);
@@ -27,9 +28,9 @@ const STATS: [keyof StatMap, string][] = [
   ['agilidad', 'Agilidad'],
 ];
 
-const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'long', timeStyle: 'short' });
 const numFmt = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 });
-const formatDate = (value: string | null) => (value ? dateFmt.format(new Date(value)) : '—');
+const formatDate = (value: string | null) => (value ? formatDateTime(value) : '—');
+const isFuture = (value: string | null) => value !== null && parseUtc(value).getTime() > Date.now();
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 function groupBy<T>(rows: T[], key: (row: T) => string): [string, T[]][] {
@@ -166,7 +167,7 @@ const menhirEffect = profile?.menhir
                       <>
                         <td>{s.rank > 0 ? `${s.rank} · ${s.levelName}` : 'Sin iniciar'}</td>
                         <td>{s.next ? `${s.next.name} (umbral ${s.next.threshold})` : 'Nivel máximo'}</td>
-                        <td>{s.retryAfter ? formatDate(s.retryAfter) : '—'}</td>
+                        <td>{isFuture(s.retryAfter) ? formatDate(s.retryAfter) : '—'}</td>
                       </>
                     ) : (
                       <td colspan="3">Excluida</td>

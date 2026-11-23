@@ -2,6 +2,7 @@
 
 import { withPassive } from './api';
 import { showToast } from './ui';
+import { formatClock } from '../lib/dates';
 
 const AUTO_REFRESH_INTERVAL_MS = 30000;
 const BASE_RECONNECT_DELAY_MS = 2000;
@@ -39,7 +40,7 @@ export function connectEventSource<T>(url: string, onMessage: (data: T) => void)
 
 export function markRefreshed() {
   const label = document.getElementById('lastRefreshLabel');
-  if (label) label.textContent = `${new Date().toLocaleTimeString('es-ES')}`;
+  if (label) label.textContent = formatClock(new Date());
 }
 
 interface LiveEvent { section?: string | null; message?: string | null }
