@@ -93,5 +93,13 @@ test('magia-admin tirada publica el resultado sin efímero', async () => {
   assert.equal(interaction.replies[0].flags, undefined);
   const embed = interaction.replies[0].embeds[0].toJSON();
   assert.match(embed.title, /Alteración/);
-  assert.equal(embed.fields.find(f => f.name === 'Total').value, '20 / 19');
+  assert.equal(embed.fields.find(f => f.name === 'Total').value, '20 (se pide 19 o más)');
+});
+
+test('magia-admin no deja a un Rolepriest gestionar su propio progreso', async () => {
+  state.rolepriest = true;
+  const before = state.rollCalls.length;
+  const interaction = fakeInteraction('tirada', { jugador: { id: 'staff1' }, escuela: 'alteracion' });
+  await assert.rejects(commands['magia-admin'].execute(interaction), /propio progreso/);
+  assert.equal(state.rollCalls.length, before);
 });

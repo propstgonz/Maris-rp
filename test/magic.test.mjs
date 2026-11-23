@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STATS, effectiveStats } from '../src/domain/picarda.js';
 import {
-  RETRY_DAYS, attemptModifier, isSuccess, mentorQualifies, canClaimFreeSchool,
+  RETRY_DAYS, attemptModifier, isSuccess, thresholdLabel, mentorQualifies, canClaimFreeSchool,
 } from '../src/domain/magic.js';
 
 const SCHOOLS = {
@@ -43,6 +43,14 @@ test('éxito si total >= umbral, también con decimales', () => {
   assert.equal(isSuccess(20, 21), false);
   assert.equal(isSuccess(18.5, 19), false);
   assert.equal(isSuccess(19.5, 19), true);
+});
+
+test('el umbral se muestra como en el PDF', () => {
+  assert.equal(thresholdLabel(19), '19 o más');
+  assert.equal(thresholdLabel(24), '24 o más');
+  assert.equal(thresholdLabel(20.5), 'más de 20');
+  assert.equal(isSuccess(20.5, 20.5), true);
+  assert.equal(isSuccess(20, 20.5), false);
 });
 
 test('un mentor sirve con nivel igual o superior al objetivo', () => {

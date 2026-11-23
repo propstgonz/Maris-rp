@@ -42,7 +42,7 @@ const PAGED = {
   },
   conjuros: {
     fetch: (playerId, page, school) => getUnlockedSpells(playerId, { schoolSlug: school, page, pageSize: PAGE_SIZE }),
-    build: (data, school) => buildSpellsEmbed({ ...data, schoolName: data.rows[0]?.school ?? school }),
+    build: (data) => buildSpellsEmbed(data),
   },
 };
 

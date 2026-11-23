@@ -10,6 +10,11 @@ export function isSuccess(total, threshold) {
   return Number(total) >= Number(threshold);
 }
 
+export function thresholdLabel(threshold) {
+  const value = Number(threshold);
+  return Number.isInteger(value) ? `${value} o más` : `más de ${Math.floor(value)}`;
+}
+
 export function mentorQualifies(mentorRank, targetRank) {
   return Number(mentorRank) >= Number(targetRank);
 }

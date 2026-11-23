@@ -82,8 +82,8 @@ test('escuelas: Encantamiento excluida, fórmulas, reintento y Magia convertida 
   const retry = new Date(Date.now() + 5 * 86_400_000);
   const overview = {
     schools: [
-      { school: school('destruccion', 'Destrucción', 2, 'autismo'), rank: 1, levelName: 'Principiante', next: { rank: 2, name: 'Aprendiz', threshold: 19 }, retryAfter: retry, active: true },
-      { school: school('alteracion', 'Alteración'), rank: 0, levelName: null, next: { rank: 1, name: 'Principiante', threshold: 19 }, retryAfter: null, active: true },
+      { school: school('destruccion', 'Destrucción', 2, 'autismo'), rank: 1, levelName: 'Principiante', next: { rank: 2, name: 'Aprendiz', threshold: 19, requiresMentor: true }, retryAfter: retry, active: true },
+      { school: school('alteracion', 'Alteración'), rank: 0, levelName: null, next: { rank: 3, name: 'Hábil', threshold: 20.5, requiresMentor: false }, retryAfter: null, active: true },
       { school: school('encantamiento', 'Encantamiento'), rank: 0, levelName: null, next: null, retryAfter: null, active: false },
     ],
     magic: { magia: 0, vidaExtra: 0.25 },
@@ -92,13 +92,14 @@ test('escuelas: Encantamiento excluida, fórmulas, reintento y Magia convertida 
   const embed = buildSchoolsEmbed(overview);
   const f = fields(embed);
   assert.match(f['Destrucción'], /Nivel 1 · Principiante/);
-  assert.match(f['Destrucción'], /D20 \+ Autismo \+ Autismo\/2 ≥ 19 · requiere mentor/);
+  assert.match(f['Destrucción'], /D20 \+ Autismo \+ Autismo\/2: 19 o más · requiere mentor/);
   assert.match(f['Destrucción'], /Puede reintentar el <t:/);
   assert.match(f['Alteración'], /Sin iniciar/);
-  assert.match(f['Alteración'], /D20 \+ Autismo \+ Intuición ≥ 19/);
+  assert.match(f['Alteración'], /D20 \+ Autismo \+ Intuición: más de 20/);
   assert.equal(f['Encantamiento'], 'Excluida hasta nuevo aviso');
   const json = embed.toJSON();
   assert.match(json.description, /\+0,25 de Vida/);
+  assert.match(json.description, /Menhir Ritual/);
   assert.match(json.description, /escuela gratuita/);
   assert.equal(schoolFormula(school('x', 'X', 1, 'autismo')), 'D20 + Autismo + Autismo');
 });

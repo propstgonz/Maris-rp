@@ -37,10 +37,17 @@ test('puntos libres = 8 + bonus - gastados', () => {
 });
 
 test('Magia = 25 x Autismo efectivo, más el Menhir del Mago, y nunca negativa', () => {
-  assert.deepEqual(magicPoints(effectiveStats(player({ autismo: 6 }), aldmer, null), null), { magia: 200, vidaExtra: 0 });
+  assert.deepEqual(magicPoints(effectiveStats(player({ autismo: 6 }), aldmer, null), null, aldmer), { magia: 200, vidaExtra: 0 });
   assert.deepEqual(magicPoints(effectiveStats(player({ autismo: 6 }), null, null), null), { magia: 150, vidaExtra: 0 });
   assert.deepEqual(magicPoints(effectiveStats(player({ autismo: 2 }), null, null), menhirMago), { magia: 100, vidaExtra: 0 });
   assert.deepEqual(magicPoints({ autismo: -1 }, null), { magia: 0, vidaExtra: 0 });
+});
+
+test('el Menhir del Aprendiz no rebasa el tope: Aldmer 200, humano 150, y el Mago suma aparte', () => {
+  const eff = (race, menhir) => effectiveStats(player({ autismo: 6 }), race, menhir);
+  assert.equal(magicPoints(eff(aldmer, menhirAprendiz), menhirAprendiz, aldmer).magia, 200);
+  assert.equal(magicPoints(eff(null, menhirAprendiz), menhirAprendiz, null).magia, 150);
+  assert.equal(magicPoints(eff(null, menhirMago), menhirMago, null).magia, 200);
 });
 
 test('el Menhir Ritual convierte toda la Magia en Vida dividiendo entre 100', () => {

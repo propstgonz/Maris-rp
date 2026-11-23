@@ -2,12 +2,11 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, requireTargetCharacter, requireLivingCharacter } from '../../utils/interactionContext.js';
 import { schoolChoices } from '../../utils/autocomplete.js';
-import { COLORS, buildSuccessEmbed, discordTimestamp } from '../../utils/embeds.js';
+import { COLORS, buildSuccessEmbed, discordTimestamp, formatNumber } from '../../utils/embeds.js';
 import { confirmAction, replyEphemeral, staffAutocomplete } from '../../utils/staffUi.js';
 import { UserFacingError } from '../../utils/errors.js';
+import { thresholdLabel } from '../../domain/magic.js';
 import { authorizedRoll, setLevel, getSchoolsOverview } from '../../services/magicService.js';
-
-const LEVEL_NAMES = ['Sin nivel', 'Principiante', 'Aprendiz', 'Hábil', 'Experto', 'Maestro'];
 
 const schoolOption = opt => opt.setName('escuela').setDescription('Escuela de magia').setRequired(true).setAutocomplete(true);
 
@@ -26,9 +25,9 @@ function rollEmbed({ player, school, mentorText, result }) {
     .setTitle(`${result.success ? '🌟' : '💨'} Tirada de magia: ${school.name}`)
     .setDescription(`<@${player.discord_id}> intenta alcanzar el nivel **${result.levelName}**.`)
     .addFields(
-      { name: '🎲 D20', value: `${result.roll}`, inline: true },
-      { name: 'Modificador', value: `${result.modifier >= 0 ? '+' : ''}${result.modifier}`, inline: true },
-      { name: 'Total', value: `${result.total} / ${result.threshold}`, inline: true },
+      { name: '🎲 D20', value: formatNumber(result.roll), inline: true },
+      { name: 'Modificador', value: `${result.modifier >= 0 ? '+' : ''}${formatNumber(result.modifier)}`, inline: true },
+      { name: 'Total', value: `${formatNumber(result.total)} (se pide ${thresholdLabel(result.threshold)})`, inline: true },
       { name: 'Resultado', value: result.success ? `Éxito: ahora es **${result.levelName}**.` : `Fracaso: puede reintentarlo ${discordTimestamp(result.retryAfter, 'D')}.` },
     )
     .setTimestamp();
@@ -54,17 +53,20 @@ export default {
       .setDescription('Fija el nivel de un jugador en una escuela')
       .addUserOption(opt => opt.setName('jugador').setDescription('Jugador objetivo').setRequired(true))
       .addStringOption(schoolOption)
-      .addIntegerOption(opt => opt.setName('nivel').setDescription('Nivel nuevo').setRequired(true)
-        .addChoices(...LEVEL_NAMES.map((name, value) => ({ name: `${value} - ${name}`, value }))))),
+      .addIntegerOption(opt => opt.setName('nivel').setDescription('Nivel nuevo (0 a 5)').setRequired(true)
+        .setMinValue(0).setMaxValue(5))),
 
   autocomplete: staffAutocomplete({
-    escuela: (text, interaction) => schoolChoices(text, { includeInactive: interaction.options.getSubcommand() === 'fijar' }),
+    escuela: text => schoolChoices(text),
   }),
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;
 
     const sub = interaction.options.getSubcommand();
+    if (interaction.options.getUser('jugador')?.id === interaction.user.id) {
+      throw new UserFacingError('Un Rolepriest no puede gestionar su propio progreso mágico.');
+    }
     const actor = actorFrom(interaction);
     const player = await requireTargetCharacter(interaction);
     const slug = interaction.options.getString('escuela', true);
@@ -83,18 +85,17 @@ export default {
 
     const rank = interaction.options.getInteger('nivel', true);
     const apply = () => setLevel(player.id, slug, rank, actor);
+    const fixed = ({ levelName }) => ({
+      embeds: [buildSuccessEmbed('Nivel fijado', `<@${player.discord_id}> en **${schoolName}**: ${levelName}.`)],
+    });
 
     if (current && rank < current.rank) {
       const done = await confirmAction(interaction,
-        `Bajar a <@${player.discord_id}> en **${schoolName}** de nivel ${current.rank} (${LEVEL_NAMES[current.rank]}) a ${rank} (${LEVEL_NAMES[rank]}).`);
+        `Bajar a <@${player.discord_id}> en **${schoolName}** de nivel ${current.rank} (${current.levelName}) a nivel ${rank}.`);
       if (!done) return;
-      await apply();
-      return done({ embeds: [buildSuccessEmbed('Nivel fijado', `<@${player.discord_id}> en **${schoolName}**: ${LEVEL_NAMES[rank]}.`)] });
+      return done(fixed(await apply()));
     }
 
-    await apply();
-    return replyEphemeral(interaction)({
-      embeds: [buildSuccessEmbed('Nivel fijado', `<@${player.discord_id}> en **${schoolName}**: ${LEVEL_NAMES[rank]}.`)],
-    });
+    return replyEphemeral(interaction)(fixed(await apply()));
   },
 };
