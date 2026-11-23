@@ -8,9 +8,9 @@ const PIP_EMOJI = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' }
 const DIE_EMOJI = '🎲';
 
 const DICE_TYPES = [
-  { sides: 6,   label: 'D6 — ataques directos y tiradas rápidas' },
-  { sides: 10,  label: 'D10 — investigación de los eruditos' },
-  { sides: 12,  label: 'D12 — dirección del viento en batalla naval' },
+  { sides: 6,   label: 'D6 — ataques directos e investigación de los Eruditos' },
+  { sides: 10,  label: 'D10 — dado libre' },
+  { sides: 12,  label: 'D12 — viento al inicio de una batalla naval' },
   { sides: 20,  label: 'D20 — acciones generales, prospección y conversión' },
   { sides: 100, label: 'D100 — puntos de inflexión y eventos mayores' },
 ];
