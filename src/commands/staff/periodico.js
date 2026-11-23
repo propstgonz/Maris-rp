@@ -35,7 +35,6 @@ export default {
         .addStringOption(opt => opt.setName('nombre').setDescription('Nombre del canal').setRequired(true).setMaxLength(80))
     ),
 
-  permission: 'rolepriest',
 
   async execute(interaction) {
     if (!await requireRolepriest(interaction)) return;

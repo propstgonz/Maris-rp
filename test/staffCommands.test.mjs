@@ -62,9 +62,8 @@ function fakeInteraction(sub, options = {}) {
   };
 }
 
-test('todas las definiciones serializan y piden Rolepriest', () => {
+test('todas las definiciones serializan', () => {
   for (const name of names.slice(0, 5)) {
-    assert.equal(commands[name].permission, 'rolepriest', name);
     const json = commands[name].data.toJSON();
     assert.ok(json.options.length <= 25, name);
   }

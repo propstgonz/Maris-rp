@@ -3,7 +3,9 @@ import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, rejectSelfTarget, requireOtherTarget } from '../../utils/interactionContext.js';
 import { propertyTypeChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
-import { confirmAction, paginate, replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
+import { confirmAction } from '../../components/confirm.js';
+import { paginate } from '../../utils/paginate.js';
+import { replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
 import { getProfile } from '../../services/profileService.js';
 import { findPlayerById } from '../../services/playerService.js';
 import { UserFacingError } from '../../utils/errors.js';
@@ -37,7 +39,6 @@ async function requireProperty(propertyId) {
 }
 
 export default {
-  permission: 'rolepriest',
 
   data: new SlashCommandBuilder()
     .setName('propiedades-admin')

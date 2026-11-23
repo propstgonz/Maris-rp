@@ -3,7 +3,8 @@ import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { ownNpcNameChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
-import { confirmAction, replyEphemeral, staffAutocomplete, targetDiscordId } from '../../utils/staffUi.js';
+import { confirmAction } from '../../components/confirm.js';
+import { replyEphemeral, staffAutocomplete, targetDiscordId } from '../../utils/staffUi.js';
 import { addNpcs, removeNpcs, adminTransferNpcs } from '../../services/npcHoldingService.js';
 
 const playerOption = (name, description) => opt => opt.setName(name).setDescription(description).setRequired(true);
@@ -11,7 +12,6 @@ const nameOption = autocomplete => opt => opt.setName('nombre').setDescription('
 const countOption = opt => opt.setName('cantidad').setDescription('Cuántos NPC').setRequired(true).setMinValue(1).setMaxValue(50);
 
 export default {
-  permission: 'rolepriest',
 
   data: new SlashCommandBuilder()
     .setName('npcs-admin')

@@ -1,10 +1,8 @@
 import { test, mock, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { resetDatabase, createCharacter, ACTOR } from './helpers.mjs';
-import { ensureEndedByColumn } from './schemaPatch.mjs';
 
 const { db, T } = await resetDatabase();
-await ensureEndedByColumn(db);
 const marriage = await import('../../src/services/marriageService.js');
 const consent = await import('../../src/services/consentService.js');
 const profile = await import('../../src/services/profileService.js');

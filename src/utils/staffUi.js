@@ -1,9 +1,6 @@
 import { MessageFlags } from 'discord.js';
 import { callerIsRolepriest } from './interactionContext.js';
 
-export { confirmAction } from '../components/confirm.js';
-export { paginate } from './paginate.js';
-
 export function replyEphemeral(interaction) {
   return payload => interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }

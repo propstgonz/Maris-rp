@@ -127,7 +127,7 @@ export async function getProfile(playerId) {
     base: baseStats(player),
     effective,
     freePoints: freePoints(player),
-    magic: magicPoints(effective, menhir),
+    magic: magicPoints(effective, menhir, race),
     menhirChangeAvailableAt: menhirChangeAvailableAt(player),
     civil: { label: civil.label, spouse: civil.spouse },
   };

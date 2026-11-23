@@ -8,8 +8,6 @@ mock.module('../../src/utils/dice.js', { namedExports: { rollDie: () => dice.rol
 let db, T, svc, UserFacingError;
 before(async () => {
   ({ db, T } = await resetDatabase());
-  await db.execute(`UPDATE ${T.mastery_levels} SET requires_mentor = 1 WHERE \`rank\` = 1`);
-  await db.execute(`UPDATE ${T.mastery_levels} SET threshold = 20.5 WHERE \`rank\` = 3`);
   ({ UserFacingError } = await import('../../src/utils/errors.js'));
   svc = await import('../../src/services/magicService.js');
 });

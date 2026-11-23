@@ -19,7 +19,7 @@ const SQL = {
   ownNpcNames: `
     SELECT n.name, COUNT(*) AS total
     FROM ${T.player_npcs} n JOIN ${T.players} p ON p.id = n.owner_player_id
-    WHERE p.discord_id = ? AND n.name LIKE ?
+    WHERE p.discord_id = ? AND n.name COLLATE utf8mb4_0900_ai_ci LIKE ?
     GROUP BY n.name ORDER BY n.name LIMIT ${MAX_CHOICES}
   `,
   ownProperties: `

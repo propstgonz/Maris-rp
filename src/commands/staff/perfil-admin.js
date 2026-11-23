@@ -3,7 +3,8 @@ import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { raceChoices, menhirChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
-import { confirmAction, replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
+import { confirmAction } from '../../components/confirm.js';
+import { replyEphemeral, staffAutocomplete, withDefined } from '../../utils/staffUi.js';
 import { STATS, STAT_LABELS } from '../../domain/picarda.js';
 import { GENDER_CHOICES, genderLabel } from '../../utils/text.js';
 import { setRace, setMenhir, grantBonusPoints, correctStat, updateIdentity, listRaces, listMenhirs } from '../../services/profileService.js';
@@ -15,7 +16,6 @@ const QUITAR = 'quitar';
 const userOption = opt => opt.setName('jugador').setDescription('Jugador objetivo').setRequired(true);
 
 export default {
-  permission: 'rolepriest',
 
   data: new SlashCommandBuilder()
     .setName('perfil-admin')

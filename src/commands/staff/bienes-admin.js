@@ -3,7 +3,9 @@ import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, requireOtherTarget } from '../../utils/interactionContext.js';
 import { goodsTypeChoices, ownGoodsChoices } from '../../utils/autocomplete.js';
 import { buildSuccessEmbed } from '../../utils/embeds.js';
-import { confirmAction, paginate, replyEphemeral, staffAutocomplete, targetDiscordId, includesText, withDefined } from '../../utils/staffUi.js';
+import { confirmAction } from '../../components/confirm.js';
+import { paginate } from '../../utils/paginate.js';
+import { replyEphemeral, staffAutocomplete, targetDiscordId, includesText, withDefined } from '../../utils/staffUi.js';
 import {
   listTypes, listCategories, createType, editType, setTypeActive, createCategory,
   addGoods, removeGoods, adminTransferGoods,
@@ -21,7 +23,6 @@ const emojiOption = opt => opt.setName('emoji').setDescription('Emoji').setMaxLe
 const descriptionOption = opt => opt.setName('descripcion').setDescription('Descripción').setMaxLength(2000);
 
 export default {
-  permission: 'rolepriest',
 
   data: new SlashCommandBuilder()
     .setName('bienes-admin')

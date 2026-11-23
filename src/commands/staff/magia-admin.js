@@ -3,7 +3,8 @@ import { requireRolepriest } from '../../utils/permissions.js';
 import { actorFrom, requireTargetCharacter, requireLivingCharacter } from '../../utils/interactionContext.js';
 import { schoolChoices } from '../../utils/autocomplete.js';
 import { COLORS, buildSuccessEmbed, discordTimestamp, formatNumber } from '../../utils/embeds.js';
-import { confirmAction, replyEphemeral, staffAutocomplete } from '../../utils/staffUi.js';
+import { confirmAction } from '../../components/confirm.js';
+import { replyEphemeral, staffAutocomplete } from '../../utils/staffUi.js';
 import { UserFacingError } from '../../utils/errors.js';
 import { thresholdLabel } from '../../domain/magic.js';
 import { authorizedRoll, setLevel, getSchoolsOverview } from '../../services/magicService.js';
@@ -36,7 +37,6 @@ function rollEmbed({ player, school, mentorText, result }) {
 }
 
 export default {
-  permission: 'rolepriest',
 
   data: new SlashCommandBuilder()
     .setName('magia-admin')
