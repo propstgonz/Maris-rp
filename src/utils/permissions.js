@@ -2,8 +2,6 @@ import { readFileSync }   from 'fs';
 import { join }           from 'path';
 import { MessageFlags }   from 'discord.js';
 import logger              from './logger.js';
-import { queryOne }        from '../database/index.js';
-import { T }                from '../database/tables.js';
 
 const CONFIG_PATH = process.env.CONFIG_PATH ?? join(process.cwd(), 'config.json');
 
@@ -19,8 +17,6 @@ try {
 }
 
 const ROLE_ROLEPRIEST = [...new Set(config.roles?.staff ?? [])];
-
-const SQL_GET_CHARACTER_CREATED_AT = `SELECT character_created_at FROM ${T.players} WHERE discord_id = ?`;
 
 const HOME_GUILD_ID = process.env.GUILD_ID;
 
@@ -57,27 +53,6 @@ export async function requireRolepriest(interaction) {
     flags: MessageFlags.Ephemeral,
   });
   return false;
-}
-
-export async function requireCharacter(interaction) {
-  const row = await queryOne(SQL_GET_CHARACTER_CREATED_AT, [interaction.user.id]);
-  if (row?.character_created_at) return true;
-
-  await interaction.reply({
-    content:
-      '👤 Todavía no tienes un personaje. Usa `/personaje crear` para empezar a rolear.',
-    flags: MessageFlags.Ephemeral,
-  });
-  return false;
-}
-
-export const PERMISSION_LEVELS = ['public', 'player', 'rolepriest'];
-
-export function resolveEffectivePermission(command, subcommandName = null) {
-  if (subcommandName && command.subcommandPermissions?.[subcommandName]) {
-    return command.subcommandPermissions[subcommandName];
-  }
-  return command.permission ?? null;
 }
 
 export { config };

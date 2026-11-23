@@ -5,6 +5,20 @@ import { COMPONENT_HANDLERS } from '../components/registry.js';
 import { UserFacingError } from '../utils/errors.js';
 import { isDatabaseReady } from '../database/index.js';
 
+const EXPIRED_COMPONENT_DELAY_MS = 2500;
+
+const EXPIRED_COMPONENT_MESSAGE = {
+  content: 'Este botón ha caducado; vuelve a lanzar el comando.',
+  flags: MessageFlags.Ephemeral,
+};
+
+function replyIfStillUnanswered(interaction) {
+  setTimeout(() => {
+    if (interaction.replied || interaction.deferred) return;
+    interaction.reply(EXPIRED_COMPONENT_MESSAGE).catch(() => {});
+  }, EXPIRED_COMPONENT_DELAY_MS).unref();
+}
+
 const STARTING_UP_MESSAGE = {
   content: '⏳ La aplicación se está iniciando (base de datos arrancando). Inténtalo de nuevo en unos segundos.',
   flags: MessageFlags.Ephemeral,
@@ -34,7 +48,10 @@ export default {
       const parsed = parseCustomId(interaction.customId);
       const handler = parsed ? COMPONENT_HANDLERS[parsed.ns] : null;
 
-      if (!handler) return;
+      if (!handler) {
+        replyIfStillUnanswered(interaction);
+        return;
+      }
 
       if (!isDatabaseReady()) {
         await interaction.reply(STARTING_UP_MESSAGE).catch(() => {});

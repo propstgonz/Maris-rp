@@ -55,6 +55,19 @@ try {
   const tiles = await get('/api/tiles');
   check('GET /api/tiles responde 404 (el mapa ya no existe)', tiles.statusCode === 404);
 
+  const logoutGet = await get('/auth/logout');
+  check('GET /auth/logout ya no cierra sesión (404)', logoutGet.statusCode === 404);
+
+  const logoutPost = await new Promise((resolve, reject) => {
+    const req = http.request({ hostname: '127.0.0.1', port, path: '/auth/logout', method: 'POST' }, res => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  check('POST /auth/logout sin token CSRF responde 403', logoutPost === 403);
+
   const mapa = await get('/api/mapamundi/vista');
   check('GET /api/mapamundi/vista responde 404', mapa.statusCode === 404);
 } catch (err) {

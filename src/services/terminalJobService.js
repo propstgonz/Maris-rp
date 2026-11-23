@@ -4,7 +4,6 @@ import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { queryOne, execute } from '../database/index.js';
 import { T } from '../database/tables.js';
 import logger from '../utils/logger.js';
-import { resolveEffectivePermission } from '../utils/permissions.js';
 import { startGuardedInterval } from '../utils/guardedInterval.js';
 
 const GUILD_ID = process.env.GUILD_ID;
@@ -177,11 +176,8 @@ export async function processNextJob(client) {
     const { interaction, getOutput } = await buildSyntheticInteraction(client, command, job);
 
     const subcommandName = interaction.options.getSubcommand();
-    const effectivePermission = command.category === 'staff'
-      ? 'rolepriest'
-      : resolveEffectivePermission(command, subcommandName);
 
-    if (effectivePermission !== 'rolepriest') {
+    if (command.category !== 'staff') {
       const target = subcommandName ? `"/${command.data.name} ${subcommandName}"` : `"/${command.data.name}"`;
       throw new Error(`${target} no está disponible desde el terminal (solo subcomandos de Staff).`);
     }

@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { rollDie } from '../../utils/dice.js';
-import { requireCharacter } from '../../utils/permissions.js';
+import { requireLivingCharacter } from '../../utils/interactionContext.js';
 import { COLORS } from '../../utils/embeds.js';
 import logger      from '../../utils/logger.js';
 
@@ -8,10 +8,9 @@ const PIP_EMOJI = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' }
 const DIE_EMOJI = '🎲';
 
 const DICE_TYPES = [
-  { sides: 6,   label: 'D6 — ataques directos e investigación de los Eruditos' },
-  { sides: 10,  label: 'D10 — dado libre' },
-  { sides: 12,  label: 'D12 — viento al inicio de una batalla naval' },
-  { sides: 20,  label: 'D20 — acciones generales, prospección y conversión' },
+  { sides: 6,   label: 'D6 — ataques directos, investigación de los Eruditos y conversión de los Misioneros' },
+  { sides: 12,  label: 'D12 — dirección del viento en batalla naval' },
+  { sides: 20,  label: 'D20 — acciones generales, prospección y conversión de los Curas' },
   { sides: 100, label: 'D100 — puntos de inflexión y eventos mayores' },
 ];
 
@@ -33,7 +32,7 @@ export default {
       .addChoices(...DICE_TYPES.map(d => ({ name: d.label, value: d.sides })))),
 
   async execute(interaction) {
-    if (!await requireCharacter(interaction)) return;
+    await requireLivingCharacter(interaction.user.id);
 
     const sides = resolveSides(interaction.options.getInteger('caras'));
     const roll  = rollDie(sides);

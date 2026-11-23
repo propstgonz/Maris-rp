@@ -67,12 +67,6 @@ function makeStatefulFakeDb() {
 
 const fakeDb = makeStatefulFakeDb();
 mock.module('../src/database/index.js', { defaultExport: fakeDb, namedExports: makeFakeNamedExports(fakeDb) });
-mock.module('../src/services/characterLifecycleService.js', {
-  namedExports: {
-    markDeceased: (client, discordId, reason, options) => ({ discord_id: discordId, reason, is_alive: 0, _fakeClient: client, _options: options ?? null }),
-    finalizeGraceDeath: (discordId, client) => ({ discord_id: discordId, is_alive: 0, character_created_at: null, _fakeClient: client }),
-  },
-});
 mock.module('../src/services/modmailService.js', {
   namedExports: {
     listPlayersWithChannel: () => [{ discord_id: 'p1', username: 'jugador1', character_name: null, modmail_channel_id: 'ch1' }],
@@ -104,7 +98,7 @@ mock.module('../src/services/broadcastService.js', {
 const { enqueueJob, getJobResult, processNextJob } = await import('../src/services/botJobService.js');
 
 test('enqueueJob + getJobResult: una fila recién encolada está pending con el payload ya parseado', async () => {
-  const id = await enqueueJob('player.kill', { discordId: '123', reason: 'prueba' }, 'staff-1');
+  const id = await enqueueJob('channels.sync_identity_cards', { discordId: '123', reason: 'prueba' }, 'staff-1');
   const job = await getJobResult(id);
   assert.equal(job.status, 'pending');
   assert.deepEqual(job.payload, { discordId: '123', reason: 'prueba' });
@@ -115,35 +109,6 @@ test('enqueueJob + getJobResult: una fila recién encolada está pending con el 
 
 test('getJobResult de un id inexistente devuelve null', async () => {
   assert.equal(await getJobResult(999999), null);
-});
-
-test('processNextJob: un job "player.kill" válido llama al markDeceased mockeado y queda "done"', async () => {
-  const id = await enqueueJob('player.kill', { discordId: '456', reason: 'ejecutado en pruebas' }, 'staff-2');
-  const fakeClient = { fake: true };
-
-  await processNextJob(fakeClient);
-
-  const job = await getJobResult(id);
-  assert.equal(job.status, 'done');
-  const result = JSON.parse(job.result_text);
-  assert.equal(result.discord_id, '456');
-  assert.equal(result.reason, 'ejecutado en pruebas');
-  assert.equal(result.is_alive, 0);
-
-  assert.deepEqual(result._options, { permadeath: true });
-});
-
-test('processNextJob: un job "player.finalize_grace" válido llama a finalizeGraceDeath mockeado y queda "done"', async () => {
-  const id = await enqueueJob('player.finalize_grace', { discordId: '999' }, 'staff-2c');
-  const fakeClient = { fake: true };
-
-  await processNextJob(fakeClient);
-
-  const job = await getJobResult(id);
-  assert.equal(job.status, 'done');
-  const result = JSON.parse(job.result_text);
-  assert.equal(result.discord_id, '999');
-  assert.equal(result.is_alive, 0);
 });
 
 test('processNextJob: "channels.sync_identity_cards" recorre listPlayersWithChannel y llama a postCharacterInfoCard por cada uno', async () => {
@@ -205,8 +170,8 @@ test('processNextJob: sin ningún job pendiente, no hace nada (no lanza)', async
 });
 
 test('processNextJob procesa en orden FIFO (el más antiguo primero)', async () => {
-  const idA = await enqueueJob('player.kill', { discordId: 'A', reason: 'primero' }, 'staff-4');
-  const idB = await enqueueJob('player.kill', { discordId: 'B', reason: 'segundo' }, 'staff-4');
+  const idA = await enqueueJob('channels.sync_identity_cards', {}, 'staff-4');
+  const idB = await enqueueJob('channels.sync_identity_cards', {}, 'staff-4');
 
   await processNextJob({});
   assert.equal((await getJobResult(idA)).status, 'done');

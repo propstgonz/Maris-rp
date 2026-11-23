@@ -1,4 +1,5 @@
 import { icon } from '../lib/icons';
+import { formatDate } from '../lib/dates';
 import { escapeHtml } from './html';
 import { statusPillHtml } from './statusPill';
 import { showConfirm, showToast } from './ui';
@@ -6,7 +7,6 @@ import { apiFetch } from './api';
 import { initLiveUpdates } from './liveUpdates';
 import type { PlayerRow } from '../lib/apiClient';
 
-const dateFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium' });
 
 export function initPlayerSearch(root: HTMLElement) {
   const searchInput = root.querySelector<HTMLInputElement>('[data-player-search-input]')!;
@@ -29,7 +29,7 @@ export function initPlayerSearch(root: HTMLElement) {
         <td>${escapeHtml(r.character_name ?? '—')}</td>
         <td>${escapeHtml(r.username)}</td>
         <td>${statusPillHtml(!!r.is_alive)}</td>
-        <td>${escapeHtml(r.character_created_at ? dateFmt.format(new Date(r.character_created_at)) : '—')}</td>
+        <td>${escapeHtml(r.character_created_at ? formatDate(r.character_created_at) : '—')}</td>
         <td class="row-actions"><a class="btn-icon" href="/staff/players/${encodeURIComponent(r.discord_id)}" title="Ver">${icon('eye', { size: 15 })}</a></td>
       </tr>`).join('');
     results.innerHTML = `<div class="admin-table-scroll"><table class="admin-table"><thead><tr><th></th><th>Personaje</th><th>Usuario</th><th>Estado</th><th>Creado</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;

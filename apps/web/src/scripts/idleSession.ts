@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiFetch, logout } from './api';
 import { showToast } from './ui';
 
 const HEARTBEAT_MIN_GAP_MS = 60_000;
@@ -23,7 +23,7 @@ export function initIdleSession(idleLogoutMinutes: number) {
         warningDelayMs
       );
     }
-    logoutTimer = setTimeout(() => { location.href = '/auth/logout'; }, idleLogoutMs);
+    logoutTimer = setTimeout(logout, idleLogoutMs);
   }
 
   function onActivity() {

@@ -24,6 +24,11 @@ export async function withPassive<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+export async function logout(): Promise<void> {
+  await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+  location.href = '/';
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

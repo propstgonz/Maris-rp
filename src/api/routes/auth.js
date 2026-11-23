@@ -64,6 +64,7 @@ export function createAuthRouter({ authLimiter }) {
 
       const isRolepriest = roles.some(r => ROLE_ROLEPRIEST.includes(r));
 
+      await new Promise((resolve, reject) => req.session.regenerate(err => (err ? reject(err) : resolve())));
       req.session.user = {
         id: discordUser.id,
         username: discordUser.username,
@@ -71,6 +72,7 @@ export function createAuthRouter({ authLimiter }) {
         isRolepriest,
       };
       req.session.lastActivity = Date.now();
+      req.session.roleCheckedAt = Date.now();
       logger.info(
         `[API] Login: ${discordUser.username} (${discordUser.id}) — ` +
         `rolepriest:${isRolepriest} cookie:...${sessionCookieFingerprint(req)}`
@@ -82,8 +84,8 @@ export function createAuthRouter({ authLimiter }) {
     }
   });
 
-  router.get('/auth/logout', (req, res) => {
-    req.session.destroy(() => res.redirect('/'));
+  router.post('/auth/logout', (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
   });
 
   return router;

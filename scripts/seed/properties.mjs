@@ -16,12 +16,15 @@ export const PROPERTY_TYPES = [
   { name: 'canal', displayName: 'Canal', category: 'infraestructura', description: `Coste: 20 de Piedra. Crea una ruta de agua. ${INFRA}` },
   { name: 'camino', displayName: 'Camino', category: 'infraestructura', description: 'Requiere una Pala. 2 Turnos Económicos por tramo (2 cuadrículas enteras). Anula los efectos negativos al paso en determinadas regiones.' },
   { name: 'muralla', displayName: 'Muralla', category: 'infraestructura', description: `Coste: 4 de Piedra por tramo (1 cuadrícula entera). ${INFRA}` },
+  { name: 'alcantarillado', displayName: 'Alcantarillado', category: 'infraestructura', description: null },
   { name: 'puente-elevadizo', displayName: 'Puente Elevadizo', category: 'infraestructura', description: `Coste: 10 de Piedra, 2 de Madera y 0,5 de Hierro Fundido. ${INFRA}` },
 
   { name: 'casino', displayName: 'Casino', category: 'ocio', description: `Coste: 8 de Piedra. ${FELICIDAD}` },
   { name: 'bar', displayName: 'Bar', category: 'ocio', description: `Coste: 4 de Piedra. ${FELICIDAD}` },
   { name: 'burdel', displayName: 'Burdel', category: 'ocio', description: `Coste: 6 de Piedra. ${FELICIDAD}` },
   { name: 'hospital', displayName: 'Hospital', category: 'ocio', description: `Coste: 12 de Piedra. ${FELICIDAD}` },
+  { name: 'parque', displayName: 'Parque', category: 'ocio', description: null },
+  { name: 'hotel', displayName: 'Hotel', category: 'ocio', description: null },
 
   { name: 'taller-fabrica', displayName: 'Taller / Fábrica', category: 'produccion', description: 'Coste: 2 de Hierro Fundido, 4 de Piedra y 2 de Carbón. Capacidad de 2.000 Trabajadores. 1 Turno Económico.' },
   { name: 'fundidora', displayName: 'Fundidora', category: 'produccion', description: 'Coste: 5 de Piedra. Capacidad de 1.000 Trabajadores. 1 Turno Económico.' },

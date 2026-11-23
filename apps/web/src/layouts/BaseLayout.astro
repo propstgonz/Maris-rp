@@ -34,7 +34,7 @@ function isActive(path: string): boolean {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#030a05" />
-    {user && <meta name="csrf-token" content={user.csrfToken} />}
+    {sessionUser && <meta name="csrf-token" content={sessionUser.csrfToken} />}
     {user && <meta name="idle-logout-minutes" content={String(user.idleLogoutMinutes)} />}
     <title>{title} — Ricardana RP</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -57,10 +57,10 @@ function isActive(path: string): boolean {
             <img class="player-avatar" src={`/api/discord-avatar/${user!.id}`} alt="" />
             {user!.username} · Rolepriest
           </span>
-          <a href="/auth/logout" class="btn-logout">
+          <button type="button" class="btn-logout" data-logout>
             <Fragment set:html={icon('log-out', { size: 15 })} />
             Salir
-          </a>
+          </button>
         </div>
       </header>
 
@@ -91,7 +91,6 @@ function isActive(path: string): boolean {
         <slot />
       </main>
 
-      <div id="modalBackdrop" class="modal-backdrop"></div>
       <div id="toastContainer" class="toast-container"></div>
       <div id="confirmBackdrop" class="confirm-backdrop"></div>
     </body>
@@ -103,10 +102,10 @@ function isActive(path: string): boolean {
         {sessionUser ? (
           <Fragment>
             <p>Ricardana RP — este panel es solo para Rolepriests. La cuenta {sessionUser.username} no tiene ese rol.</p>
-            <a class="btn-discord" href="/auth/logout">
+            <button type="button" class="btn-discord" data-logout>
               <Fragment set:html={icon('log-out', { size: 20 })} />
               Cerrar sesión
-            </a>
+            </button>
           </Fragment>
         ) : (
           <Fragment>
@@ -124,9 +123,10 @@ function isActive(path: string): boolean {
 
 {user && (
   <script>
-    import { initModalDismiss } from '../scripts/ui';
+    import { formatClock } from '../lib/dates';
+    import { logout } from '../scripts/api';
     import { initIdleSession } from '../scripts/idleSession';
-    initModalDismiss();
+    document.querySelectorAll('[data-logout]').forEach(el => el.addEventListener('click', logout));
 
     const idleLogoutMinutesEl = document.querySelector<HTMLMetaElement>('meta[name="idle-logout-minutes"]');
     if (idleLogoutMinutesEl) initIdleSession(Number(idleLogoutMinutesEl.content));
@@ -145,9 +145,15 @@ function isActive(path: string): boolean {
 
     const clockEl = document.getElementById('liveClock');
     function tickClock() {
-      if (clockEl) clockEl.textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (clockEl) clockEl.textContent = formatClock(new Date());
     }
     tickClock();
     setInterval(tickClock, 1000);
 </script>
+)}
+{sessionUser && !user && (
+  <script>
+    import { logout } from '../scripts/api';
+    document.querySelectorAll('[data-logout]').forEach(el => el.addEventListener('click', logout));
+  </script>
 )}

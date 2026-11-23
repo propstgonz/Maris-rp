@@ -5,7 +5,7 @@ import logger from '../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 
-export const PUBLIC_DIR = join(__dirname, 'public');
+const PUBLIC_DIR = join(__dirname, 'public');
 export const STATIC_DIR = join(PUBLIC_DIR, 'static');
 export const STAFF_GUIDE_PATH = join(__dirname, '..', '..', 'docs', 'guia-staff.md');
 

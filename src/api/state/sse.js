@@ -2,6 +2,8 @@ export const sseClients = new Set();
 
 export const ACTION_SECTION_MAP = {
   player: 'players', backup: 'backups', modmail: 'modmail',
+  perfil: 'players', personaje: 'players', matrimonio: 'players', consentimiento: 'players',
+  npcs: 'players', bienes: 'players', propiedades: 'players', magia: 'players',
 };
 
 const SSE_HEARTBEAT_MS = 20000;

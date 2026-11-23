@@ -4,7 +4,7 @@ import logger from './logger.js';
 
 const NGINX_BASE = process.env.NGINX_BASE_URL?.replace(/\/$/, '') ?? '';
 
-export function looksPubliclyReachable(candidate) {
+function looksPubliclyReachable(candidate) {
   let u;
   try {
     u = new URL(candidate);

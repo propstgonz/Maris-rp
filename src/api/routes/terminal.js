@@ -5,6 +5,7 @@ import { enqueueCommand, getJobResult } from '../../services/terminalJobService.
 import { requireRole } from '../middleware/auth.js';
 import { handler } from '../utils/handler.js';
 import { auditWeb } from '../state/audit.js';
+import { validateReadOnlySql, withExecutionLimit } from '../utils/sqlGuard.js';
 
 const TERMINAL_POLL_TIMEOUT_MS  = 10_000;
 const TERMINAL_POLL_INTERVAL_MS = 300;
@@ -39,14 +40,12 @@ export function createTerminalRouter({ terminalLimiter }) {
   }));
 
   router.post('/api/terminal/sql', requireRole('isRolepriest'), terminalLimiter, async (req, res) => {
-    const sqlText = (req.body?.query ?? '').trim();
-    if (!sqlText) return res.status(400).json({ error: 'Escribe una consulta SQL.' });
-    if (!/^select\s/i.test(sqlText)) {
-      return res.status(400).json({ error: 'Solo se permiten consultas SELECT — este terminal es de solo lectura.' });
-    }
+    const sqlText = String(req.body?.query ?? '').trim();
+    const rejection = validateReadOnlySql(sqlText);
+    if (rejection) return res.status(400).json({ error: rejection });
 
     try {
-      const rows = await query(sqlText);
+      const rows = await query(withExecutionLimit(sqlText));
       const truncated = rows.length > SQL_ROW_LIMIT;
       logger.info(`[API] ${req.session.user.username} ejecutó SQL desde el terminal (${rows.length} fila(s)): ${sqlText}`);
       auditWeb(req, 'terminal.sql', sqlText, { rowCount: rows.length });

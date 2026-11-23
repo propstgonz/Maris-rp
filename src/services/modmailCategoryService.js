@@ -18,7 +18,7 @@ export async function listCategories() {
   return query(SQL.listAll);
 }
 
-export async function addCategory(discordCategoryId, displayName = null) {
+async function addCategory(discordCategoryId, displayName = null) {
   if (await queryOne(SQL.findByDiscordId, [discordCategoryId])) {
     throw new Error('Esa categoría ya está registrada para modmail.');
   }

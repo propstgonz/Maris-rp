@@ -31,7 +31,7 @@ const SECTIONS = [
   },
   {
     name: '🎲 Dados',
-    value: '`/dado [caras]` — tira un dado libre (D6, D10, D12, D20 o D100).',
+    value: '`/dado [caras]` — tira un dado libre (D6, D12, D20 o D100).',
   },
 ];
 
