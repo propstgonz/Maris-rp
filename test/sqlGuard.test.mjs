@@ -41,3 +41,11 @@ test('rechaza comentarios y varias sentencias', () => {
 test('withExecutionLimit añade la pista de tiempo máximo', () => {
   assert.match(withExecutionLimit('SELECT 1'), /^SELECT \/\*\+ MAX_EXECUTION_TIME\(5000\) \*\/ 1$/);
 });
+
+test('rechaza FOR SHARE y los schemas de sistema', () => {
+  assert.ok(validateReadOnlySql('SELECT * FROM rp_players.players FOR SHARE'));
+  assert.ok(validateReadOnlySql('SELECT * FROM performance_schema.threads'));
+  assert.ok(validateReadOnlySql('SELECT * FROM sys.session'));
+  assert.ok(validateReadOnlySql('SELECT * FROM information_schema.tables'));
+  assert.equal(validateReadOnlySql('SELECT id FROM rp_players.players'), null);
+});

@@ -152,6 +152,9 @@ export async function buildSyntheticInteraction(client, command, job) {
     async reply(payload) { replied = true; outputBlocks.push(payloadToText(payload)); return interaction; },
     async followUp(payload) { outputBlocks.push(payloadToText(payload)); return interaction; },
     async deferReply() { deferred = true; return interaction; },
+    async fetchReply() {
+      throw new Error('Este subcomando pide confirmación con botones, que el terminal no admite: úsalo desde Discord.');
+    },
     async editReply(payload) {
       const text = payloadToText(payload);
       if (outputBlocks.length > 0) outputBlocks[outputBlocks.length - 1] = text;

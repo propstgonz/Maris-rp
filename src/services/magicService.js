@@ -23,7 +23,7 @@ const SQL = {
   menhir: `SELECT m.* FROM ${T.menhirs} m JOIN ${T.players} p ON p.menhir_id = m.id WHERE p.id = ?`,
   progress:     `SELECT level_rank, retry_after FROM ${T.school_progress} WHERE player_id = ? AND school_id = ?`,
   progressLocked: `SELECT level_rank, retry_after FROM ${T.school_progress} WHERE player_id = ? AND school_id = ? FOR UPDATE`,
-  playerLocked: `SELECT is_alive, free_school_claimed_at FROM ${T.players} WHERE id = ? FOR UPDATE`,
+  playerLocked: `SELECT is_alive, character_created_at, free_school_claimed_at FROM ${T.players} WHERE id = ? FOR UPDATE`,
   allProgress:  `SELECT school_id, level_rank, retry_after FROM ${T.school_progress} WHERE player_id = ?`,
   ensureProgress: `
     INSERT INTO ${T.school_progress} (player_id, school_id, level_rank) VALUES (?, ?, 0)
@@ -34,7 +34,7 @@ const SQL = {
     LEFT JOIN ${T.races} r ON r.id = p.race_id
     LEFT JOIN ${T.menhirs} m ON m.id = p.menhir_id
     SET p.free_school_claimed_at = NOW()
-    WHERE p.id = ? AND p.is_alive = 1 AND p.free_school_claimed_at IS NULL
+    WHERE p.id = ? AND p.is_alive = 1 AND p.character_created_at IS NOT NULL AND p.free_school_claimed_at IS NULL
       AND p.stat_autismo + COALESCE(r.mod_autismo, 0) + COALESCE(m.mod_autismo, 0) >= ${FREE_SCHOOL_MIN_AUTISMO}
   `,
   grantFreeRank: `
@@ -44,7 +44,7 @@ const SQL = {
   claimRoll: `
     UPDATE ${T.school_progress} sp
     JOIN ${T.schools} s ON s.id = sp.school_id AND s.is_active = 1
-    JOIN ${T.players} p ON p.id = sp.player_id AND p.is_alive = 1
+    JOIN ${T.players} p ON p.id = sp.player_id AND p.is_alive = 1 AND p.character_created_at IS NOT NULL
     SET sp.retry_after = NOW() + INTERVAL ${RETRY_DAYS} DAY
     WHERE sp.player_id = ? AND sp.school_id = ? AND sp.level_rank = ?
       AND (sp.retry_after IS NULL OR sp.retry_after <= NOW())
@@ -63,7 +63,7 @@ const SQL = {
     SELECT p.id, COALESCE(sp.level_rank, 0) AS level_rank
     FROM ${T.players} p
     LEFT JOIN ${T.school_progress} sp ON sp.player_id = p.id AND sp.school_id = ?
-    WHERE p.id = ? AND p.is_alive = 1
+    WHERE p.id = ? AND p.is_alive = 1 AND p.character_created_at IS NOT NULL
   `,
   setLevel: `
     UPDATE ${T.school_progress} SET level_rank = ?, retry_after = NULL
@@ -169,7 +169,7 @@ export async function getSchoolsOverview(playerId) {
   return {
     schools: rows,
     magic: magicPoints(effective, menhir, player),
-    canClaimFreeSchool: Boolean(player.is_alive) && canClaimFreeSchool(effective, player),
+    canClaimFreeSchool: Boolean(player.is_alive && player.character_created_at) && canClaimFreeSchool(effective, player),
   };
 }
 
@@ -186,7 +186,7 @@ export async function claimFreeSchool(playerId, schoolSlug, actor) {
     const { changes } = await execute(SQL.claimFree, [playerId]);
     if (changes === 0) {
       const locked = await queryOne(SQL.playerLocked, [playerId]);
-      if (!locked.is_alive) throw new UserFacingError('Ese personaje está muerto.');
+      if (!locked.is_alive || !locked.character_created_at) throw new UserFacingError('Ese personaje está muerto.');
       if (locked.free_school_claimed_at) throw new UserFacingError('Ya reclamaste tu escuela gratuita.');
       throw new UserFacingError(`Necesitas Autismo efectivo ${FREE_SCHOOL_MIN_AUTISMO} o más para la escuela gratuita.`);
     }
@@ -214,9 +214,10 @@ async function checkMentor({ schoolId, level, targetRank, playerId, mentorPlayer
 
 export async function authorizedRoll({ playerId, schoolSlug, mentorPlayerId = null, mentorLabel = null, actor }) {
   const outcome = await withTransaction(async () => {
+    await queryOne(SQL.playerLocked, [playerId]);
     const school = await loadSchool(schoolSlug);
     const { player, effective } = await loadPlayer(playerId);
-    if (!player.is_alive) throw new UserFacingError('Ese personaje está muerto.');
+    if (!player.is_alive || !player.character_created_at) throw new UserFacingError('Ese personaje está muerto.');
 
     await execute(SQL.ensureProgress, [playerId, school.id]);
     const current = await queryOne(SQL.progressLocked, [playerId, school.id]);
@@ -262,7 +263,7 @@ export async function authorizedRoll({ playerId, schoolSlug, mentorPlayerId = nu
         retryAfter: success ? null : fromSqlDatetime(after.retry_after),
       },
     };
-  });
+  }, { retryOnDeadlock: 3 });
 
   await logAction(auditEntry(actor, 'magia.tirada', outcome.player.discord_id, {
     escuela: outcome.school.slug,
@@ -285,7 +286,7 @@ export async function setLevel(playerId, schoolSlug, rank, actor) {
   const { school, player, levelName, previous } = await withTransaction(async () => {
     const found = await loadSchool(schoolSlug);
     const { player: row } = await loadPlayer(playerId);
-    if (!row.is_alive) throw new UserFacingError('Ese personaje está muerto.');
+    if (!row.is_alive || !row.character_created_at) throw new UserFacingError('Ese personaje está muerto.');
     await execute(SQL.ensureProgress, [playerId, found.id]);
     const before = await queryOne(SQL.progressLocked, [playerId, found.id]);
     await execute(SQL.setLevel, [newRank, playerId, found.id, newRank]);

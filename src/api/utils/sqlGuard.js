@@ -6,8 +6,8 @@ const FORBIDDEN = [
   [/\bsleep\s*\(/i, 'SLEEP no está permitido.'],
   [/\bbenchmark\s*\(/i, 'BENCHMARK no está permitido.'],
   [/\bget_lock\s*\(/i, 'GET_LOCK no está permitido.'],
-  [/\bfor\s+update\b|\block\s+in\s+share\s+mode\b/i, 'Las lecturas con bloqueo no están permitidas.'],
-  [/\bmysql\s*\./i, 'El schema mysql no es accesible desde el terminal.'],
+  [/\bfor\s+(update|share)\b|\block\s+in\s+share\s+mode\b/i, 'Las lecturas con bloqueo no están permitidas.'],
+  [/\b(mysql|performance_schema|sys|information_schema)\s*\./i, 'Los schemas de sistema no son accesibles desde el terminal.'],
   [/\bweb_sessions\b/i, 'La tabla de sesiones no es accesible desde el terminal.'],
 ];
 

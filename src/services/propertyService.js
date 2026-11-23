@@ -42,7 +42,7 @@ const SQL = {
     WHERE id = ?
   `,
   setTypeActive: `UPDATE ${T.property_types} SET is_active = ? WHERE id = ?`,
-  lockLiving:    `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1 FOR UPDATE`,
+  lockLiving:    `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL FOR UPDATE`,
   countByOwner:  `SELECT COUNT(*) AS total FROM ${T.properties} WHERE owner_player_id = ?`,
   listByOwner: `
     SELECT p.id, t.display_name AS type_display_name, t.category, p.name, p.level, p.location, t.emoji

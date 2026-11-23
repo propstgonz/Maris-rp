@@ -95,7 +95,7 @@ pipeline {
 
           # Directorios de datos persistentes montados por bind mount en
           # docker-compose.yml (datos de MySQL + bucket de imágenes de
-          # avatars/items/construcciones/NPCs) — rutas absolutas del host,
+          # avatars) — rutas absolutas del host,
           # AJENAS al workspace de Jenkins, así que ni siquiera existen
           # dentro del contenedor de Jenkins (no está montado /media/raid
           # ahí) — un `mkdir -p` normal en este mismo shell no las crearía
@@ -104,18 +104,15 @@ pipeline {
           # que sí habla con el demonio del host — así, si faltan, las
           # crea de verdad ahí; si ya existen, no hace nada.
           #
-          # Los CINCO directorios van en UN SOLO contenedor (antes era uno
+          # Los directorios van en UN SOLO contenedor (antes era uno
           # por directorio): el trabajo real es instantáneo, lo que costaba
-          # era arrancar y tirar cinco contenedores seguidos (~0,4s cada
+          # era arrancar y tirar varios contenedores seguidos (~0,4s cada
           # uno, medido). Se mantienen dos `docker run` separados en este
           # stage —este y el de arriba— a propósito, para no perder el
           # mensaje de error concreto de cada uno.
           docker run --rm \
             -v /media/raid/database/rpbot:/probe/db \
             -v /media/raid/bucket/rpdiscbot/avatars:/probe/avatars \
-            -v /media/raid/bucket/rpdiscbot/items:/probe/items \
-            -v /media/raid/bucket/rpdiscbot/constructions:/probe/constructions \
-            -v /media/raid/bucket/rpdiscbot/npcs:/probe/npcs \
             alpine:3.19 true \
             || (echo "No se han podido preparar los directorios de datos persistentes en el host (/media/raid/...) — revisa que el disco esté montado y que el demonio de Docker pueda escribir ahí." && exit 1)
         '''

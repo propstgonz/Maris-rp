@@ -23,8 +23,8 @@ const SQL = {
   `,
   insertType: `INSERT INTO ${T.items} (name, display_name, category_id, emoji, description) VALUES (?, ?, ?, ?, ?)`,
   setActive: `UPDATE ${T.items} SET is_active = ? WHERE id = ?`,
-  alivePlayer: `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1 FOR UPDATE`,
-  lockPlayers: `SELECT id, is_alive FROM ${T.players} WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`,
+  alivePlayer: `SELECT id FROM ${T.players} WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL FOR UPDATE`,
+  lockPlayers: `SELECT id, is_alive, character_created_at FROM ${T.players} WHERE id IN (?, ?) ORDER BY id ASC FOR UPDATE`,
   upsert: `
     INSERT INTO ${T.inventory} (player_id, item_id, quantity) VALUES (?, ?, ?)
     ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
@@ -263,7 +263,7 @@ export async function transferGoodsInTx(fromId, toId, itemId, quantity) {
   if (Number(fromId) === Number(toId)) throw new UserFacingError('El origen y el destino no pueden ser el mismo personaje.');
   const players = await query(SQL.lockPlayers, [fromId, toId]);
   const to = players.find(p => p.id === Number(toId));
-  if (!to || !to.is_alive) throw new UserFacingError('El destinatario no tiene un personaje vivo.');
+  if (!to || !to.is_alive || !to.character_created_at) throw new UserFacingError('El destinatario no tiene un personaje vivo.');
   const type = await _requireActiveType(itemId);
   await _takeInTx(fromId, itemId, qty);
   await _addInTx(toId, itemId, qty);

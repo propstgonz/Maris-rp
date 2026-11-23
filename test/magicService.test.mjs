@@ -13,7 +13,7 @@ const levels = [1, 2, 3, 4, 5].map((rank, i) => ({ rank, name: `N${rank}`, thres
 
 async function queryOne(sql) {
   if (sql.includes('FROM rp_players.schools WHERE slug')) return school;
-  if (sql.includes('SELECT p.*, r.mod_potencia')) return { id: 1, discord_id: 'd1', is_alive: 1, stat_autismo: 3, stat_intuicion: 2 };
+  if (sql.includes('SELECT p.*, r.mod_potencia')) return { id: 1, discord_id: 'd1', is_alive: 1, character_created_at: '2026-01-01 00:00:00', stat_autismo: 3, stat_intuicion: 2 };
   if (sql.includes('FROM rp_players.menhirs m')) return null;
   if (sql.includes('SELECT level_rank, retry_after')) return state.progress;
   if (sql.includes('SELECT p.id, COALESCE')) return state.mentor;

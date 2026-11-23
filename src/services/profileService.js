@@ -30,7 +30,7 @@ const SQL = {
   allocate: Object.fromEntries(STATS.map(stat => [stat, `
     UPDATE ${T.players}
     SET stat_${stat} = stat_${stat} + ?, updated_at = NOW()
-    WHERE id = ? AND is_alive = 1
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
       AND stat_${stat} + ? <= ${MAX_BASE_PER_STAT}
       AND (${STAT_SUM}) + ? <= ${BASE_POINTS} + stat_bonus_points
   `])),
@@ -38,32 +38,32 @@ const SQL = {
   correct: Object.fromEntries(STATS.map(stat => [stat, `
     UPDATE ${T.players}
     SET stat_${stat} = ?, updated_at = NOW()
-    WHERE id = ? AND is_alive = 1
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
       AND (${STAT_SUM}) - stat_${stat} + ? <= ${BASE_POINTS} + stat_bonus_points
   `])),
 
   grantBonus: `
     UPDATE ${T.players}
     SET stat_bonus_points = stat_bonus_points + ?, updated_at = NOW()
-    WHERE id = ? AND is_alive = 1 AND stat_bonus_points + ? <= ${MAX_BONUS_POINTS}
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL AND stat_bonus_points + ? <= ${MAX_BONUS_POINTS}
   `,
-  setRace: `UPDATE ${T.players} SET race_id = ?, updated_at = NOW() WHERE id = ? AND is_alive = 1`,
+  setRace: `UPDATE ${T.players} SET race_id = ?, updated_at = NOW() WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL`,
   chooseMenhir: `
     UPDATE ${T.players}
     SET menhir_id = ?, menhir_chosen_at = NOW(), updated_at = NOW()
-    WHERE id = ? AND is_alive = 1
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
       AND (menhir_id IS NULL OR menhir_chosen_at IS NULL OR menhir_chosen_at <= NOW() - INTERVAL ${MENHIR_CHANGE_MONTHS} MONTH)
       AND (menhir_id IS NULL OR menhir_id <> ?)
   `,
   setMenhir: `
     UPDATE ${T.players}
     SET menhir_chosen_at = IF(menhir_id IS NULL, NOW(), menhir_chosen_at), menhir_id = ?, updated_at = NOW()
-    WHERE id = ? AND is_alive = 1
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
   `,
   clearMenhir: `
     UPDATE ${T.players}
     SET menhir_id = NULL, menhir_chosen_at = NULL, updated_at = NOW()
-    WHERE id = ? AND is_alive = 1
+    WHERE id = ? AND is_alive = 1 AND character_created_at IS NOT NULL
   `,
   updateIdentity: {
     characterName: 'character_name = ?',
@@ -213,7 +213,7 @@ export async function chooseMenhir(playerId, menhirSlug, actor) {
   const { changes } = await execute(SQL.chooseMenhir, [menhir.id, playerId, menhir.id]);
   const player = await requirePlayerById(playerId);
   if (changes === 0) {
-    if (!player.is_alive) throw new UserFacingError('Necesitas un personaje vivo.');
+    if (!player.is_alive || !player.character_created_at) throw new UserFacingError('Necesitas un personaje vivo.');
     if (player.menhir_id === menhir.id) throw new UserFacingError(`Ya tienes ${menhir.name}.`);
     if (!canChangeMenhir(player)) {
       throw new UserFacingError(

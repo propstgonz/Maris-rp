@@ -27,7 +27,7 @@ Crea y gestiona el personaje.
   - `jugador` (usuario): solo Rolepriest, para ver el de otro. Efímera.
 
 ### /perfil
-Ficha del personaje: estadísticas base y efectivas, puntos libres, raza, menhir, Magia, estado civil, y botones para pasar a NPCs, Bienes, Propiedades, Escuelas y Conjuros. Según el estado aparecen los botones «Asignar puntos» (si quedan puntos libres), «Elegir menhir» (si no tienes o ya pasaron 6 meses), «Proponer matrimonio» y «Divorciarse».
+Ficha del personaje: cabecera (nombre, avatar, género, edad, fecha de creación) y cuatro apartados: estadísticas (base, modificador y total, con los puntos libres), raza, menhir y estado civil. Debajo, un menú desplegable para pasar a NPCs, Bienes, Propiedades, Escuelas y Conjuros (la Magia se ve en Escuelas). Según el estado aparecen los botones «Asignar puntos» (si quedan puntos libres), «Elegir menhir» (si no tienes o ya pasaron 6 meses), «Proponer matrimonio» y «Divorciarse».
 
 - `jugador` (usuario): solo Rolepriest, para ver a otro. Con ese objetivo no hay botones de acción.
 
@@ -80,7 +80,7 @@ Efímera.
 
 ### /matrimonio
 - `proponer`: propón matrimonio a otro personaje vivo. Pide confirmación; el destinatario recibe la propuesta por MD y la acepta o rechaza (también desde `/solicitudes`). Caduca a las 24 h.
-  - `usuario` (usuario, obligatoria). Sin esta opción el bot lo pregunta con un selector.
+  - `usuario` (usuario, obligatoria). Desde el botón «Proponer matrimonio» de `/perfil` se elige con un selector.
 - `divorciar`: te divorcias de tu cónyuge. Pide confirmación (irreversible) y avisa al cónyuge por MD. Sin opciones.
 
 Efímera.

@@ -40,7 +40,6 @@ services:
       - /media/raid/database/rpbot:/app/data
       - ${HOST_PROJECT_DIR:-.}/config.json:/app/config.json:ro
       - /media/raid/bucket/rpdiscbot/avatars:/app/avatars
-      - /media/raid/bucket/rpdiscbot/items:/app/items
       # De solo lectura y aparte de los mounts sueltos de arriba: el backup
       # (backupService.js) necesita ver el árbol ENTERO del bucket, no solo
       # las subcarpetas que este proceso usa en caliente.
@@ -67,9 +66,6 @@ services:
       - /media/raid/database/rpbot:/app/data
       - ${HOST_PROJECT_DIR:-.}/config.json:/app/config.json:ro
       - /media/raid/bucket/rpdiscbot/avatars:/app/avatars
-      - /media/raid/bucket/rpdiscbot/items:/app/items
-      - /media/raid/bucket/rpdiscbot/constructions:/app/constructions
-      - /media/raid/bucket/rpdiscbot/npcs:/app/npcs
       # Ver el mismo mount en rp-disc-bot — el botón "generar ahora" de la
       # web llama a runBackup() directamente desde este proceso.
       - /media/raid/bucket/rpdiscbot:/app/bucket:ro

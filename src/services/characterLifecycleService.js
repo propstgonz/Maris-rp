@@ -87,6 +87,7 @@ const SQL = {
     UPDATE ${T.players}
     SET is_alive = 1, died_at = NULL, updated_at = NOW()
     WHERE discord_id = ? AND is_alive = 0 AND character_created_at IS NOT NULL
+      AND died_at > DATE_SUB(NOW(), INTERVAL ${GRACE_PERIOD_DAYS} DAY)
   `,
 
   claimReturn: `
@@ -301,6 +302,9 @@ export async function createCharacter(discordId, username, fields, { guild = nul
   await execute(SQL.ensureRow, [discordId, username]);
 
   await withTransaction(async () => {
+    const row = await queryOne(SQL.getByDiscordId, [discordId]);
+    if (row?.character_created_at) throw new UserFacingError('Ya tienes un personaje creado.');
+    await wipeHoldingsInTx(row.id);
     const claim = await execute(SQL.claimCreation, [characterName, fields.age, fields.gender, race.id, discordId]);
     if (claim.changes === 0) throw new UserFacingError('Ya tienes un personaje creado.');
     await execute(SQL.insertRegistry, [discordId, characterName]);

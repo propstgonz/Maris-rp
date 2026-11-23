@@ -16,6 +16,9 @@ async function resolveMentor(interaction) {
   const label = interaction.options.getString('mentor_npc');
   if (mentor && label) throw new UserFacingError('Indica un mentor jugador o un mentor NPC, no ambos.');
   if (!mentor) return { mentorPlayerId: null, mentorLabel: label ? `NPC ${label} (palabra del Rolepriest)` : null };
+  if (mentor.id === interaction.user.id) {
+    throw new UserFacingError('No puedes ser el mentor de una tirada que tú mismo autorizas: que la autorice otro Rolepriest.');
+  }
   const player = await requireLivingCharacter(mentor.id, { self: false });
   return { mentorPlayerId: player.id, mentorLabel: null };
 }

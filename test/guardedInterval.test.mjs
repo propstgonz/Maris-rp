@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { startGuardedInterval } from '../src/utils/guardedInterval.js';
 
@@ -45,12 +45,18 @@ test('startGuardedInterval: un error en la tarea no detiene los siguientes ticks
 });
 
 test('startGuardedInterval: una tarea SÍNCRONA (sin promesa) también respeta la guarda', async () => {
-  const TICK_MS = 10;
-  let calls = 0;
-
-  const timer = startGuardedInterval(() => { calls++; }, TICK_MS);
-  await new Promise(resolve => setTimeout(resolve, TICK_MS * 3 + 5));
-  clearInterval(timer);
-
-  assert.ok(calls >= 2, `una tarea síncrona rápida debería correr en varios ticks (llamadas: ${calls})`);
+  mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    const TICK_MS = 10;
+    let calls = 0;
+    const timer = startGuardedInterval(() => { calls++; }, TICK_MS);
+    for (let i = 0; i < 3; i++) {
+      mock.timers.tick(TICK_MS);
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    clearInterval(timer);
+    assert.equal(calls, 3, `una tarea síncrona rápida debería correr en cada tick (llamadas: ${calls})`);
+  } finally {
+    mock.timers.reset();
+  }
 });

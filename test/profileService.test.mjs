@@ -64,7 +64,7 @@ test('allocateStat: un solo UPDATE con la guarda completa en el WHERE', async ()
   });
   await profile.allocateStat(5, 'potencia', 3, actor);
   assert.equal(executed.length, 1);
-  assert.match(executed[0].q, /WHERE id = \? AND is_alive = 1 AND stat_potencia \+ \? <= 6 AND \(.*\) \+ \? <= 8 \+ stat_bonus_points$/);
+  assert.match(executed[0].q, /WHERE id = \? AND is_alive = 1 AND character_created_at IS NOT NULL AND stat_potencia \+ \? <= 6 AND \(.*\) \+ \? <= 8 \+ stat_bonus_points$/);
   assert.deepEqual(executed[0].params, [3, 5, 3, 3]);
   assert.equal(logged[0].action, 'perfil.stat_asignada');
 });

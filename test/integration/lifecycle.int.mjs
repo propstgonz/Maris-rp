@@ -261,3 +261,28 @@ test('withTransaction con retryOnDeadlock reintenta el interbloqueo hasta comple
   const results = await settle([crossing(a.id, b.id), crossing(b.id, a.id)]);
   assert.equal(fulfilled(results), 2, results.map(r => r.reason?.message).join(' | '));
 });
+
+test('tras una muerte definitiva nadie escribe en la fila vacía y el personaje nuevo empieza limpio', async () => {
+  const profile = await import('../../src/services/profileService.js');
+  const magic = await import('../../src/services/magicService.js');
+  const p = await createCharacter(db, T, { raceSlug: 'aldmer' });
+  const madera = await goods.createType({ displayName: `Madera muerte ${p.id}` }, ACTOR);
+  const casa = await properties.createType({ displayName: `Casa muerte ${p.id}`, category: 'vivienda' }, ACTOR);
+  await lifecycle.killCharacter(p.discord_id, 'test', ACTOR);
+
+  await assert.rejects(profile.grantBonusPoints(p.id, 5, ACTOR), UserFacingError);
+  await assert.rejects(profile.allocateStat(p.id, 'autismo', 6, ACTOR), UserFacingError);
+  await assert.rejects(goods.addGoods(p.id, madera.id, 3, ACTOR), UserFacingError);
+  await assert.rejects(properties.grantProperty(p.id, casa.id, {}, ACTOR), UserFacingError);
+  await assert.rejects(magic.setLevel(p.id, 'destruccion', 5, ACTOR), UserFacingError);
+
+  await db.execute(`UPDATE ${T.players} SET stat_bonus_points = 9, stat_autismo = 6 WHERE id = ?`, [p.id]);
+  await db.execute(`INSERT INTO ${T.inventory} (player_id, item_id, quantity) VALUES (?, ?, 4)`, [p.id, madera.id]);
+  await db.execute(`UPDATE ${T.players} SET died_at = NOW() - INTERVAL 400 HOUR WHERE id = ?`, [p.id]);
+
+  const fresh = await lifecycle.createCharacter(p.discord_id, 'nuevo', { characterName: 'Personaje Nuevo', age: 20, gender: 'mujer', raceSlug: 'nordico' });
+  assert.equal(fresh.stat_bonus_points, 0);
+  assert.equal(fresh.stat_autismo, 0);
+  const { n } = await db.queryOne(`SELECT COUNT(*) AS n FROM ${T.inventory} WHERE player_id = ?`, [p.id]);
+  assert.equal(Number(n), 0);
+});

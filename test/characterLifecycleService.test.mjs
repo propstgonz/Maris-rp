@@ -110,6 +110,7 @@ test('createCharacter: el cooldown activo lo rechaza', async () => {
 test('createCharacter: la reclamación lleva character_created_at IS NULL y changes 0 lo rechaza', async () => {
   reset((q, params, mode) => {
     if (q.includes('FROM rp_players.races')) return { id: 1 };
+    if (q.startsWith('SELECT * FROM rp_players.players')) return { id: 7, character_created_at: null };
     if (q.startsWith('UPDATE rp_players.players SET character_created_at')) return { changes: 0 };
   });
   await assert.rejects(
@@ -121,16 +122,19 @@ test('createCharacter: la reclamación lleva character_created_at IS NULL y chan
   assert.equal(executed.some(e => e.q.includes('character_registry')), false);
 });
 
-test('createCharacter: crea el registro y audita', async () => {
+test('createCharacter: limpia restos, crea el registro y audita', async () => {
+  let claimed = false;
   reset((q, params, mode) => {
     if (q.includes('FROM rp_players.races')) return { id: 1 };
-    if (q.startsWith('SELECT * FROM rp_players.players')) return { ...living };
+    if (q.startsWith('UPDATE rp_players.players SET character_created_at')) { claimed = true; return undefined; }
+    if (q.startsWith('SELECT * FROM rp_players.players')) return claimed ? { ...living } : { id: 7, character_created_at: null };
   });
   const row = await lifecycle.createCharacter('d', 'u', { characterName: ' Fulano ', age: 30, gender: 'hombre', raceSlug: 'nordico' });
   assert.equal(row.id, 7);
   const registry = executed.find(e => e.q.includes('character_registry'));
   assert.deepEqual(registry.params, ['d', 'Fulano']);
   assert.equal(logged[0].action, 'personaje.creado');
+  assert.ok(executed.some(e => e.q.startsWith('DELETE FROM rp_economy.inventory')));
 });
 
 const lockedState = (overrides = {}) => ({ id: 7, discord_id: 'vivo', is_alive: 1, character_created_at: '2026-01-01 00:00:00', died_at: null, ...overrides });
@@ -235,7 +239,7 @@ test('reviveCharacter: el claim exige muerto con personaje; si no, lanza', async
     if (q.startsWith('UPDATE rp_players.players SET is_alive = 1')) return { changes: 0 };
   });
   await assert.rejects(() => lifecycle.reviveCharacter('vivo', actor), /ya está vivo/);
-  assert.match(executed[0].q, /WHERE discord_id = \? AND is_alive = 0 AND character_created_at IS NOT NULL$/);
+  assert.match(executed[0].q, /WHERE discord_id = \? AND is_alive = 0 AND character_created_at IS NOT NULL\s+AND died_at > DATE_SUB\(NOW\(\), INTERVAL 7 DAY\)$/);
 });
 
 test('reviveCharacter: tras una muerte definitiva lo dice y no revive', async () => {
