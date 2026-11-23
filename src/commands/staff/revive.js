@@ -1,6 +1,8 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { reviveCharacter, reviveByCharacterId } from '../../services/characterLifecycleService.js';
 import { requireRolepriest } from '../../utils/permissions.js';
+import { actorFrom, rejectSelfTarget } from '../../utils/interactionContext.js';
+import { findPlayerById } from '../../services/playerService.js';
 import { COLORS }       from '../../utils/embeds.js';
 import { getAvatarUrl } from '../../utils/playerAvatar.js';
 import logger             from '../../utils/logger.js';
@@ -46,10 +48,11 @@ export default {
     if (!await requireRolepriest(interaction)) return;
 
     const sub = interaction.options.getSubcommand();
-    const actor = { discordId: interaction.user.id, username: interaction.user.tag, source: 'discord' };
+    const actor = actorFrom(interaction);
 
     if (sub === 'jugador') {
       const targetUser = interaction.options.getUser('jugador', true);
+      rejectSelfTarget(interaction, targetUser.id);
 
       let revived;
       try {
@@ -64,6 +67,8 @@ export default {
     }
 
     const personajeId = interaction.options.getInteger('id', true);
+    const target = await findPlayerById(personajeId);
+    if (target) rejectSelfTarget(interaction, target.discord_id);
 
     let revived;
     try {

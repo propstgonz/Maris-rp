@@ -3,7 +3,7 @@
 import { SlashCommandBuilder, ChannelType, EmbedBuilder, MessageFlags } from 'discord.js';
 import { getSetting, setSetting } from '../../services/settingsService.js';
 import { requireRolepriest, resolveGuild } from '../../utils/permissions.js';
-import { requireTargetCharacter } from '../../utils/interactionContext.js';
+import { requireOtherTarget } from '../../utils/interactionContext.js';
 import { createPrintingPressChannel } from '../../services/newspaperService.js';
 import { UserFacingError } from '../../utils/errors.js';
 import { COLORS }       from '../../utils/embeds.js';
@@ -62,7 +62,7 @@ export default {
     }
 
     if (sub === 'abrir') {
-      const player = await requireTargetCharacter(interaction);
+      const player = await requireOtherTarget(interaction);
       const guild = resolveGuild(interaction);
       if (!guild) throw new UserFacingError('No se encontró el servidor donde crear el canal.');
 

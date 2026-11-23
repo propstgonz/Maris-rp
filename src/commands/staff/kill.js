@@ -2,7 +2,7 @@
 
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from 'discord.js';
 import { markDeceased } from '../../services/characterLifecycleService.js';
-import { actorFrom } from '../../utils/interactionContext.js';
+import { actorFrom, rejectSelfTarget } from '../../utils/interactionContext.js';
 import { requireRolepriest, resolveGuild, config } from '../../utils/permissions.js';
 import { COLORS }       from '../../utils/embeds.js';
 import { getAvatarUrl } from '../../utils/playerAvatar.js';
@@ -28,6 +28,7 @@ export default {
     if (!await requireRolepriest(interaction)) return;
 
     const targetUser = interaction.options.getUser('jugador', true);
+    rejectSelfTarget(interaction, targetUser.id);
     const motivo      = interaction.options.getString('motivo') ?? 'eliminado por Staff';
 
     const actor = actorFrom(interaction);
